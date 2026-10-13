@@ -129,6 +129,34 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .pts b{font-family:Bungee;font-weight:400;font-size:24px}
 .augl{font-size:15px;margin:2px 0 6px}
 
+/* ----- écran d'accueil ----- */
+body.home #hud, body.home #dock{display:none}
+body.home #stage{position:fixed;inset:0}
+body.home #game{width:100vw!important;height:100vh!important;object-fit:cover;border:0;border-radius:0;box-shadow:none;cursor:default}
+#ov.home{background:linear-gradient(90deg,rgba(28,19,13,.86) 0%,rgba(28,19,13,.62) 34%,rgba(28,19,13,0) 62%);justify-content:flex-start;align-items:stretch;padding:0}
+.home-panel{display:flex;flex-direction:column;justify-content:center;gap:28px;padding:48px 56px;max-width:560px;width:100%;color:var(--paper)}
+.home-panel .logo{font-size:clamp(26px,3.2vw,46px);margin:0;flex-wrap:nowrap}
+.home-panel .logo span{animation:tile 3.2s ease-in-out infinite;animation-delay:calc(var(--i)*-.32s)}
+@keyframes tile{0%,100%{transform:rotate(var(--r)) translateY(0)}50%{transform:rotate(calc(var(--r)*-1)) translateY(-5px)}}
+.tagline{font-size:19px;font-weight:600;color:#E9D9B8;margin-top:-14px}
+.home-nav{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.home-nav button{text-align:left;font-family:Bungee;font-size:clamp(24px,2.6vw,34px);line-height:1.15;color:var(--paper);background:none;border:0;padding:6px 0 6px 34px;cursor:pointer;position:relative;text-shadow:3px 3px 0 var(--ink);transition:transform .15s,color .15s}
+.home-nav button::before{content:"";position:absolute;left:4px;top:50%;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:16px solid #C3C9CF;transform:translateY(-55%) scale(0);transition:transform .15s;filter:drop-shadow(2px 2px 0 var(--ink))}
+.home-nav button:hover,.home-nav button:focus-visible{color:#F2C14E;transform:translateX(8px);outline:none}
+.home-nav button:hover::before,.home-nav button:focus-visible::before{transform:translateY(-55%) scale(1)}
+.home-nav small{display:block;font-family:'Barlow Semi Condensed';font-size:15px;font-weight:600;color:#D8C7A4;text-shadow:none;letter-spacing:0}
+.home-foot{font-size:14px;color:#BFAE8C;font-weight:600}
+.sheet .back{margin-right:auto}
+.howto{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0 16px}
+.howto div{border:3px solid var(--ink);border-top:9px solid var(--pc);background:var(--card);border-radius:4px;padding:10px 12px}
+.howto b{display:block;font-family:Bungee;font-weight:400;font-size:17px;margin-bottom:6px}
+.howto ul{margin-left:18px;font-size:16px;line-height:1.35}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:16px;align-items:center}
+kbd{font-family:Bungee;font-size:13px;background:var(--paper);border:2px solid var(--ink);border-bottom-width:4px;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.optrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:2px solid rgba(46,34,25,.15);font-size:17px;font-weight:600}
+.optrow small{display:block;font-weight:500;font-size:14px}
+@media (prefers-reduced-motion:reduce){ .home-panel .logo span{animation:none} .home-nav button{transition:none} }
+@media (max-width:700px){ #ov.home{background:rgba(28,19,13,.78)} .home-panel{padding:28px 22px} }
 @media (max-width:900px){
   #mini{display:none}
 }
@@ -269,13 +297,17 @@ const fmt=v=>v.toFixed(1).replace('.',',');
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let cfg={runners:3,rounds:7,map:'alea',mode:'L',ai:[false,false,false,false],skins:['blob','yeti','peng']};
+/* Options du joueur, gardées dans ce navigateur */
+const OPT={shake:true,parts:true,labels:true};
+try{ Object.assign(OPT,JSON.parse(localStorage.getItem('traquenard-options')||'{}')); }catch(e){}
+function saveOpt(){ try{ localStorage.setItem('traquenard-options',JSON.stringify(OPT)); }catch(e){} }
 /* État réseau (mode en ligne) */
 const NET={on:false,host:false,seat:null,idx:-1,pid:'',name:'',code:'',url:'',room:{},es:null,sn:0,status:'',err:''};
 let G=null, terrain=[], grid=[], gateGrid=[], spikes=[], animT=0, mouse={x:-99,y:-99,cx:-99,cy:-99,in:false}, SIM=false;
 const modeOk=o=>!o.mode||o.mode===(G?G.mode:cfg.mode);
-const trapAI=()=>G?!!G.aiTrap:cfg.ai[3];
+const trapAI=()=>G&&!G.demo?!!G.aiTrap:cfg.ai[3];
 /* ce poste commande le piégeur ? */
-const canTrap=()=>NET.on?NET.seat==='t':!trapAI();
+const canTrap=()=>G&&G.demo?false:NET.on?NET.seat==='t':!trapAI();
 /* ce poste arbitre la partie (fait tourner les IA, décide des phases) ? */
 const authority=()=>!NET.on||NET.host;
 
@@ -323,6 +355,8 @@ function updateCamera(dt){
 const keys=new Set(), pressed=new Set();
 const INP=[0,1,2].map(()=>({l:false,r:false,j:false,d:false,lP:false,rP:false,jP:false,dP:false}));
 addEventListener('keydown',e=>{
+  const typing=e.target&&e.target.tagName==='INPUT';
+  if(typing){ if(e.code==='Enter'&&e.target.dataset.enter){ const f=NETACT[e.target.dataset.enter]; if(f) f(); } return; }
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   keys.add(e.code);
   if(!e.repeat){ pressed.add(e.code); onKey(e); }
@@ -365,7 +399,16 @@ function pollInputs(){
 }
 
 function onKey(e){
-  if(!G) return;
+  if(isHome()&&(e.code==='ArrowDown'||e.code==='ArrowUp')){
+    const B=[...document.querySelectorAll('.home-nav button')], i=B.indexOf(document.activeElement);
+    const n=B.length; if(n) B[(i<0?0:(i+(e.code==='ArrowDown'?1:-1)+n)%n)].focus();
+    return;
+  }
+  if(e.code==='Escape'&&G&&!G.demo&&!NET.on){
+    if(G.paused){ ACT.resume(); return; }
+    if(['place','verify','countdown','run'].includes(G.phase)&&ov.hidden){ showPause(); return; }
+  }
+  if(!G||G.paused||G.demo) return;
   const btnFocus=document.activeElement&&document.activeElement.tagName==='BUTTON';
   if(G.phase==='place'&&canTrap()){
     if(e.code==='KeyR') rotate(1);
@@ -423,15 +466,25 @@ const ACT={
     cfg.ai=v==='trap'?[true,true,true,false]:v==='run'?[false,true,true,true]:[false,false,false,false];
     renderMenu(); renderDock();
   },
-  start(){ newGame(); },
+  start(){ gameMode(); newGame(); },
   tool(b){ if(G&&G.phase==='place'){ G.sel=b.dataset.type; renderDock(); } },
   go(){ if(G&&G.phase==='place') beginVerify(false); },
   pick(b){ pickCard(b.dataset.who,+b.dataset.i); },
   cont(){ afterResult(); },
   again(){ newGame(); },
-  menu(){ G=null; loadMap('triple'); renderHud(); showMenu(); },
+  menu(){ G=null; showHome(); },
+  home(){ clearAsk=false; showHome(); },
+  solo(){ renderMenu(); const b=ov.querySelector('[data-act=start]'); if(b) b.focus({preventScroll:true}); },
+  howto(){ renderHowTo(); },
+  records(){ renderRecords(); },
+  options(){ renderOptions(); },
+  setopt(b){ OPT[b.dataset.k]=b.dataset.v==='1'; saveOpt(); renderOptions(); },
+  fullscreen(){ const d=document.documentElement; try{ if(document.fullscreenElement) document.exitFullscreen(); else if(d.requestFullscreen) d.requestFullscreen(); }catch(e){} },
+  clearrec(b){ if(b.dataset.v==='ask') clearAsk=true; else { if(b.dataset.v==='1'){ REC={}; saveRec(); } clearAsk=false; } renderOptions(); },
+  resume(){ if(G){ G.paused=false; last=performance.now(); } hideOverlay(); },
+  quit(){ if(G) G.paused=false; G=null; showHome(); },
   skin(b){ const i=+b.dataset.i; cfg.skins[i]=SKINS[(SKINS.indexOf(cfg.skins[i])+1)%SKINS.length]; renderMenu(); },
-  online(){ showOnline(); },
+  online(){ setHome(false); showOnline(); },
   net(b){ const f=NETACT[b.dataset.n]; if(f) f(b); },
   lobby(){ if(NET.host) netBackToLobby(); }
 };
@@ -526,6 +579,22 @@ function newGame(setup,noStart){
   if(!noStart) nextRound();
 }
 function nextRound(){ G.round++; startDraft(); }
+
+/* ----- partie de démonstration derrière l'écran d'accueil : tout est joué par l'IA ----- */
+let demoIdx=Math.floor(Math.random()*3);
+function startDemo(){
+  if(NET.on) return;
+  const ks=Object.keys(MAPS), map=ks[(demoIdx++)%ks.length];
+  const skins=SKINS.slice().sort(()=>Math.random()-.5);
+  newGame({mode:'L',map,rounds:99,runners:3,ai:[true,true,true,true],skins,names:null,remote:[false,false,false]},true);
+  G.demo=true; G.round=1;
+  G.trapper.points=12;
+  G.trapper.unlocked=new Set(['pics','scie','mine','canon']);
+  G.trapper.aug={traqueur:1};
+  for(let i=0;i<10&&aiPlaceOne(null);i++);
+  G.parts=[];
+  startRun();
+}
 
 function runnerStats(a){
   return {speed:235*(1+.1*(a.sprint||0)), jump:660*(1+.07*(a.saut||0)), grav:1900*(1-.08*(a.plume||0)),
@@ -1156,8 +1225,8 @@ function checkHazards(r){
   if(r.alive&&!r.finished&&overlap(r,G.goalZ)){
     r.finished=true; r.rank=++G.finCount; r.finishes++; r.time=G.runT;
     const k=recKey();
-    if(!(REC[k]<=r.time)){ REC[k]=r.time; r.record=true; saveRec(); }
-    G.toast={text:r.name+' : '+fmt(r.time)+' s'+(r.record?', record':''),t:2};
+    if(!G.demo&&!(REC[k]<=r.time)){ REC[k]=r.time; r.record=true; saveRec(); }
+    if(!G.demo) G.toast={text:r.name+' : '+fmt(r.time)+' s'+(r.record?', record':''),t:2};
     const c=r.x+r.w/2;
     for(const col of COLORS) burst(c,r.y,col,10,260);
   }
@@ -1191,6 +1260,7 @@ function stepRun(dt){
   if(!pending.length){ G.endDelay-=dt; if(G.endDelay<=0) endRun(); }
 }
 function endRun(){
+  if(G.demo){ G.phase='demoEnd'; const g=G; setTimeout(()=>{ if(G===g) startDemo(); },1600); return; }
   G.phase='result';
   /* classement d'après les temps (utile en ligne : les arrivées distantes arrivent dans le désordre) */
   G.runners.filter(r=>r.finished).sort((a,b)=>a.time-b.time).forEach((r,i)=>r.rank=i+1);
@@ -1526,7 +1596,7 @@ function onRoomChange(key,first){
   if(all||key==='meta'||key==='players'){
     const m=NET.room.meta||{};
     if(!NET.host&&m.status==='game'&&NET.view==='lobby'){ NET.view='game'; showOverlay('<div class="sheet"><h2>La partie commence</h2><p>Chargement de la carte.</p></div>'); if(NET.room.snap) applySnap(NET.room.snap); }
-    if(m.status==='lobby'&&NET.view==='game'){ G=null; NET.seat=null; NET.idx=-1; loadMap('triple'); NET.view='lobby'; renderHud(); renderDock(); }
+    if(m.status==='lobby'&&NET.view==='game'){ G=null; NET.seat=null; NET.idx=-1; loadMap('triple'); NET.view='lobby'; setHome(false); renderHud(); renderDock(); }
     if(NET.view==='lobby') renderOnline();
   }
   if(!NET.host&&(all||key==='snap')&&NET.room.snap&&NET.view==='game') applySnap(NET.room.snap);
@@ -1556,7 +1626,7 @@ function netTick(dt){
   if(!NET.on) return;
   NET.beat-=dt;
   if(NET.beat<=0){ NET.beat=5; netPatch('players/'+NET.pid,{seen:{'.sv':'timestamp'}}); }
-  if(!NET.host||!G) return;
+  if(!NET.host||!G||!G.netSetup) return;
   /* joueurs partis : l'hôte choisit à leur place pour ne pas bloquer la partie */
   const act=new Set(activePlayers().map(p=>p.pid)), pids=G.netSetup.pids;
   if(G.phase==='draft'&&G.draft){
@@ -1641,7 +1711,7 @@ function onPlace(){
   if(NET.host&&P.done){ if(!ctrl) setTraps(P.traps); startRun(); }
 }
 function netEvent(ev){
-  if(!NET.on||!G) return;
+  if(!NET.on||!G||G.demo) return;
   ev.by=NET.pid; ev.round=G.round;
   fbReq('POST','ev',ev);
 }
@@ -1661,7 +1731,7 @@ function onEvents(){
 /* Envoi : ~15 fois par seconde, jusqu'à 3 requêtes en vol. Chaque paquet porte un numéro
    et l'heure d'envoi pour que les autres le replacent dans le temps. */
 function netLiveTick(dt){
-  if(!NET.on||!G) return;
+  if(!NET.on||!G||G.demo) return;
   NET.liveT-=dt;
   if(NET.liveT>0) return;
   NET.liveT=1/15;
@@ -1741,7 +1811,7 @@ function applySnap(s){
     newGame({mode:st.mode,map:st.map,rounds:st.rounds,runners:st.runners,ai:toArr(st.ai),skins:toArr(st.skins),names,
       remote:[0,1,2].map(i=>pids[i]!==NET.pid)},true);
     G.gid=s.gid; G.netSetup=st; G.setup.names=names;
-    hideOverlay();
+    gameMode(); hideOverlay();
   }
   G.round=s.round; G.teamScore=s.team||0; G.trapper.score=s.trap||0;
   G.trapper.aug=s.augT||{};
@@ -1818,7 +1888,7 @@ function netHostStart(){
   const gid=Date.now();
   NET.seat=pids.indexOf(NET.pid)===3?'t':(pids.indexOf(NET.pid)>=0&&pids.indexOf(NET.pid)<3?'r'+pids.indexOf(NET.pid):null);
   NET.idx=NET.seat&&NET.seat[0]==='r'?+NET.seat.slice(1):-1;
-  NET.view='game'; NET.sn=0;
+  NET.view='game'; NET.sn=0; gameMode();
   ['picks','place','res','ev','live','snap'].forEach(k=>netDel(k));
   netPatch('meta',{status:'game',gid});
   newGame({mode:setup.mode,map,rounds:setup.rounds,runners,ai,skins,names:names.map(n=>n==='-'?'':n),
@@ -1831,7 +1901,7 @@ function netRematch(){ if(NET.host) netHostStart(); }
 function netBackToLobby(){
   netPatch('meta',{status:'lobby'});
   G=null; NET.seat=null; NET.idx=-1; loadMap('triple'); NET.view='lobby';
-  renderHud(); renderDock(); renderOnline();
+  setHome(false); renderHud(); renderDock(); renderOnline();
 }
 function legendRunner(i){
   if(G&&NET.on){
@@ -1860,6 +1930,7 @@ async function netEnter(code,create){
   if(create&&meta) return 'taken';
   if(!create&&!meta){ NET.err='Salon '+code+' introuvable.'; renderOnline(); return false; }
   NET.on=true; NET.host=!!create;
+  if(G&&G.demo){ G=null; loadMap('triple'); }   /* la démo d'accueil s'arrête : rien ne doit partir sur le réseau */
   if(create) await fbReq('PUT','meta',{host:NET.pid,mode:cfg.mode,map:cfg.map,rounds:cfg.rounds,runners:cfg.runners,status:'lobby',created:{'.sv':'timestamp'}});
   await fbReq('PUT','players/'+NET.pid,{name:NET.name,seat:'',skin:SKINS[0],joined:{'.sv':'timestamp'},seen:{'.sv':'timestamp'}});
   if(!NET.on) return false;
@@ -1869,7 +1940,7 @@ async function netEnter(code,create){
   return true;
 }
 const NETACT={
-  back(){ NET.view=''; showMenu(); },
+  back(){ NET.view=''; showHome(); },
   async create(){
     readJoinForm();
     for(let k=0;k<4;k++){ const r=await netEnter(randomCode(),true); if(r!=='taken') return; }
@@ -1900,7 +1971,7 @@ function renderOnline(){
     ov.innerHTML='<div class="sheet lobby"><h2>Jouer en ligne</h2>'+
       '<p>Crée un salon et donne son code aux autres joueurs, ou rejoins un salon existant.</p>'+
       '<div class="opts"><label for="netName">Pseudo</label><input id="netName" maxlength="14" value="'+esc(NET.name)+'" placeholder="Ton pseudo">'+
-      '<label for="netCode">Code</label><input id="netCode" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;max-width:140px"></div>'+
+      '<label for="netCode">Code</label><input id="netCode" data-enter="join" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;max-width:140px"></div>'+
       (NET.err?'<p class="netmsg">'+esc(NET.err)+'</p>':'')+
       '<div class="row-end" style="margin-top:14px"><button class="btn alt" data-act="net" data-n="back">Retour</button>'+
       '<button class="btn alt" data-act="net" data-n="join">Rejoindre</button><button class="btn" data-act="net" data-n="create">Créer un salon</button></div></div>';
@@ -1953,6 +2024,7 @@ function frame(now){
 }
 function update(dt){
   animT+=dt;
+  if(G&&G.paused) return;
   updateCamera(dt);
   netTick(dt);
   if(!G) return;
@@ -1975,7 +2047,7 @@ function update(dt){
     netLiveTick(dt);
     for(const r of G.runners) if(r.ai) r.ai.expandBudget=1;
     stepRun(dt);
-    if(G.phase==='run') chronoHud(false);
+    if(G.phase==='run'&&!G.demo) chronoHud(false);
   }
   if(G.flash){ G.flash.t-=dt; if(G.flash.t<=0) G.flash=null; }
   if(G.toast){ G.toast.t-=dt; if(G.toast.t<=0) G.toast=null; }
@@ -1984,7 +2056,7 @@ function update(dt){
   G.parts=G.parts.filter(p=>p.life>0);
 }
 function burst(x,y,color,n,sp){
-  if(SIM||!G) return;
+  if(SIM||!G||!OPT.parts) return;
   for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, v=sp*(.3+Math.random()*.7);
     G.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-sp*.3,life:.4+Math.random()*.5,color,s:3+Math.random()*4}); }
 }
@@ -2327,7 +2399,7 @@ function drawRunner(r){
     ctx.fillStyle='#F2C14E'; ctx.strokeStyle=INK; ctx.lineWidth=1.5;
     for(let i=0;i<3;i++){ const a=animT*9+i*2.1; ctx.beginPath(); ctx.arc(fx+Math.cos(a)*12,top-5+Math.sin(a)*3,3,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
   }
-  const lab=r.label, ly=top-((r.stun>0||r.hold>0)?11:3);
+  const lab=OPT.labels&&!G.demo?r.label:'', ly=top-((r.stun>0||r.hold>0)?11:3);
   ctx.font='11px Bungee'; ctx.textAlign='center'; ctx.textBaseline='bottom';
   ctx.strokeStyle='#F1E4C8'; ctx.lineWidth=3; ctx.strokeText(lab,fx,ly);
   ctx.fillStyle=r.color; ctx.fillText(lab,fx,ly);
@@ -2407,7 +2479,7 @@ function render(){
   if(!ctx) return;
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle='#4A3628'; ctx.fillRect(0,0,VW,VH);
-  const s=cam.s, sh=G&&!reduceMotion?G.shake:0;
+  const s=cam.s, sh=G&&!reduceMotion&&OPT.shake?G.shake:0;
   const jx=sh?(Math.random()-.5)*sh:0, jy=sh?(Math.random()-.5)*sh:0;
   ctx.setTransform(s,0,0,s,-cam.x*s+jx,offY()+jy);
   ctx.drawImage(tc,0,0);
@@ -2431,6 +2503,7 @@ function render(){
     ctx.strokeStyle=kg>=1?'#F2C14E':'#F1E4C8'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(mouse.x,mouse.y,8,-Math.PI/2,-Math.PI/2+Math.PI*2*kg); ctx.stroke();
   }
   ctx.setTransform(1,0,0,1,0,0);
+  if(G.demo) return;
   if(G.phase==='run'||G.phase==='countdown') drawOffscreen();
   if(G.phase==='place'){
     if(G.aiTrap) pill(G.aiP&&G.aiP.stage==='graph'?'Le piégeur IA étudie la carte':'Le piégeur IA pose ses pièges',VW/2,30,18,TRAPPER_COLOR,'#fff');
@@ -2460,9 +2533,12 @@ function slotHTML(i,title,color,ctrl){
     '<button data-act="slot" data-i="'+i+'" data-v="ia" aria-pressed="'+ia+'">IA</button></div>'+
     '<small>'+(ia?'Joué par l’ordinateur':ctrl)+'</small></div>';
 }
-function renderMenu(){
+function logoHTML(){
   const cols=['var(--r1)','var(--r2)','var(--r3)','var(--trap)'], rot=[-5,3,-2,4,-4,2,-3,5,-1,3];
-  const logo='TRAQUENARD'.split('').map((l,i)=>'<span style="--c:'+cols[i%4]+';--r:'+rot[i]+'deg">'+l+'</span>').join('');
+  return 'TRAQUENARD'.split('').map((l,i)=>'<span style="--c:'+cols[i%4]+';--r:'+rot[i]+'deg;--i:'+i+'">'+l+'</span>').join('');
+}
+function renderMenu(){
+  setHome(false);
   const L=cfg.mode==='L';
   const rules=L
     ?['Plusieurs couloirs mènent au drapeau : à chacun de choisir le sien.','Coureur arrivé : 1 point pour l’équipe. Coureur éliminé ou hors délai : 1 point au piégeur.','En course, le piégeur abat un pilon (clic gauche) et ferme des herses (clic droit).','Les pièges restent d’une manche à l’autre.']
@@ -2470,8 +2546,8 @@ function renderMenu(){
   let slots='';
   for(let i=0;i<cfg.runners;i++) slots+=slotHTML(i,'<button class="skinbtn" data-act="skin" data-i="'+i+'" title="Changer de personnage"><img src="'+SPR[cfg.skins[i]].idle.d+'" alt=""></button>J'+(i+1)+' '+SKIN_NAMES[cfg.skins[i]],COLORS[i],SCHEMES[i].txt);
   slots+=slotHTML(3,'Piégeur','var(--trap)','Souris, R pivote, Q D défilent');
-  ov.innerHTML='<div class="sheet"><h1 class="logo" aria-label="Traquenard">'+logo+'</h1>'+
-    '<p>Les coureurs traversent la carte. Le piégeur la remplit, manche après manche.</p>'+
+  ov.innerHTML='<div class="sheet"><h2>Partie solo ou en local</h2>'+
+    '<p>Règle la partie. Les places marquées IA sont jouées par l’ordinateur, les autres se partagent le clavier.</p>'+
     '<div class="opts">'+
       '<label>Pièges</label>'+seg('mode',[['L','Létaux'],['N','Non létaux']])+
       '<label>Coureurs</label>'+seg('runners',[[2,'2 contre 1'],[3,'3 contre 1']])+
@@ -2484,10 +2560,90 @@ function renderMenu(){
     '</div>'+
     '<div class="slots">'+slots+'</div>'+
     '<ul class="rules" style="margin-top:14px">'+rules.map(t=>'<li>'+t+'</li>').join('')+'</ul>'+
-    '<div class="row-end"><button class="btn alt" data-act="online">Jouer en ligne</button><button class="btn" data-act="start">Jouer</button></div></div>';
+    '<div class="row-end"><button class="btn alt back" data-act="home">Retour</button><button class="btn" data-act="start">Jouer</button></div></div>';
   ov.hidden=false;
 }
-function showMenu(){ renderMenu(); renderDock(); const b=ov.querySelector('.btn'); if(b&&b.focus) b.focus({preventScroll:true}); }
+function showMenu(){ showHome(); }
+
+/* ----- écran d'accueil ----- */
+/* menus : carte en plein écran (body.home) ; panneau latéral seulement sur l'accueil (ov.home) */
+const isHome=()=>ov.classList.contains('home');
+function setHome(panel){
+  document.body.classList.add('home');
+  ov.classList.toggle('home',!!panel);
+  fit();
+}
+function gameMode(){
+  if(!document.body.classList.contains('home')&&!ov.classList.contains('home')) return;
+  document.body.classList.remove('home'); ov.classList.remove('home'); fit();
+}
+function showHome(){
+  if(!G||!G.demo) startDemo();
+  setHome(true);
+  ov.innerHTML='<div class="home-panel"><h1 class="logo" aria-label="Traquenard">'+logoHTML()+'</h1>'+
+    '<p class="tagline">Un piégeur. Trois coureurs. Une seule sortie.</p>'+
+    '<nav class="home-nav" aria-label="Menu principal">'+
+      '<button data-act="solo">Solo<small>Contre l’IA ou à plusieurs sur un clavier</small></button>'+
+      '<button data-act="online">En ligne<small>Salon privé, chacun sur son écran</small></button>'+
+      '<button data-act="howto">Comment jouer</button>'+
+      '<button data-act="records">Records</button>'+
+      '<button data-act="options">Options</button>'+
+    '</nav><p class="home-foot">Version 4</p></div>';
+  ov.hidden=false;
+  renderHud(); renderDock();
+  const b=ov.querySelector('.home-nav button'); if(b) b.focus({preventScroll:true});
+}
+function sheetBack(){ return '<button class="btn alt back" data-act="home">Retour</button>'; }
+function renderHowTo(){
+  setHome(false);
+  ov.innerHTML='<div class="sheet wide"><h2>Comment jouer</h2>'+
+    '<div class="howto">'+
+      '<div style="--pc:var(--r1)"><b>Coureurs</b><ul><li>Atteindre le drapeau avant la fin du chrono.</li><li>Plusieurs couloirs : choisis le moins piégé.</li><li>Chaque arrivée rapporte 1 point à l’équipe.</li></ul></div>'+
+      '<div style="--pc:var(--trap)"><b>Piégeur</b><ul><li>Pose des pièges avant chaque course.</li><li>En course : pilon au clic gauche, herse au clic droit.</li><li>Chaque coureur qui échoue lui rapporte 1 point.</li></ul></div>'+
+      '<div style="--pc:#C9971A"><b>Manches</b><ul><li>Une amélioration à choisir pour chacun.</li><li>Les pièges restent d’une manche à l’autre.</li><li>Le camp en retard tire des cartes plus rares.</li></ul></div>'+
+    '</div>'+
+    '<div class="keys">'+
+      '<span><kbd>Q</kbd> <kbd>D</kbd> <kbd>Z</kbd> <kbd>S</kbd></span><span>Coureur 1 : gauche, droite, saut, dash</span>'+
+      '<span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></span><span>Coureur 2, ou ton coureur en ligne</span>'+
+      '<span><kbd>J</kbd> <kbd>L</kbd> <kbd>I</kbd> <kbd>K</kbd></span><span>Coureur 3</span>'+
+      '<span><kbd>Souris</kbd> <kbd>R</kbd></span><span>Piégeur : poser, pivoter ; clic droit pour retirer</span>'+
+      '<span><kbd>Échap</kbd></span><span>Pause pendant une partie locale</span>'+
+    '</div>'+
+    '<div class="row-end" style="margin-top:16px">'+sheetBack()+'</div></div>';
+  ov.hidden=false;
+}
+function renderRecords(){
+  setHome(false);
+  const rows=Object.keys(MAPS).map(k=>{
+    const L=REC[k+'-L'], N=REC[k+'-N'];
+    return '<tr style="--pc:var(--r1)"><td>'+MAPS[k].name+'</td><td class="t">'+(L?fmt(L)+' s':'-')+'</td><td class="t">'+(N?fmt(N)+' s':'-')+'</td></tr>';
+  }).join('');
+  ov.innerHTML='<div class="sheet"><h2>Records</h2><p>Meilleurs temps d’arrivée enregistrés dans ce navigateur.</p>'+
+    '<table class="res"><tr><td style="border-left:0">Carte</td><td class="t">Pièges létaux</td><td class="t">Non létaux</td></tr>'+rows+'</table>'+
+    '<div class="row-end">'+sheetBack()+'</div></div>';
+  ov.hidden=false;
+}
+let clearAsk=false;
+function renderOptions(){
+  setHome(false);
+  const tog=(k,label,sub)=>'<div class="optrow"><span>'+label+'<small>'+sub+'</small></span><div class="seg">'+
+    '<button data-act="setopt" data-k="'+k+'" data-v="1" aria-pressed="'+OPT[k]+'">Oui</button>'+
+    '<button data-act="setopt" data-k="'+k+'" data-v="0" aria-pressed="'+(!OPT[k])+'">Non</button></div></div>';
+  ov.innerHTML='<div class="sheet"><h2>Options</h2>'+
+    tog('shake','Tremblements de l’écran','Pilons, mines et herses secouent la caméra.')+
+    tog('parts','Particules','Éclats, poussière et étincelles.')+
+    tog('labels','Noms au-dessus des personnages','J1, J2, pseudos en ligne.')+
+    '<div class="optrow"><span>Plein écran<small>Touche Échap pour en sortir.</small></span><button class="btn alt" data-act="fullscreen">Activer</button></div>'+
+    '<div class="optrow"><span>Effacer les records<small>Supprime tous les meilleurs temps de ce navigateur.</small></span>'+
+      (clearAsk?'<div class="seg"><button data-act="clearrec" data-v="1">Confirmer</button><button data-act="clearrec" data-v="0">Annuler</button></div>':'<button class="btn alt" data-act="clearrec" data-v="ask">Effacer</button>')+'</div>'+
+    '<div class="row-end" style="margin-top:16px">'+sheetBack()+'</div></div>';
+  ov.hidden=false;
+}
+function showPause(){
+  G.paused=true;
+  showOverlay('<div class="sheet"><h2>Pause</h2><p>Manche '+G.round+' sur '+G.rounds+'.</p>'+
+    '<div class="row-end"><button class="btn alt" data-act="quit">Quitter la partie</button><button class="btn" data-act="resume">Reprendre</button></div></div>');
+}
 function cardHTML(a,who,i,d,owned,pc){
   const lvl=owned[a.id]||0, now=d.done&&d.chosen===i?lvl:lvl+1;
   const locked=d.ai||(NET.on&&seatOf(who)!==NET.seat);
@@ -2543,11 +2699,12 @@ function renderOver(){
     (NET.on?(NET.host?'<div class="row-end"><button class="btn alt" data-act="lobby">Retour au salon</button><button class="btn" data-act="again">Revanche</button></div>':'<p>En attente de l’hôte.</p>'):'<div class="row-end"><button class="btn alt" data-act="menu">Menu</button><button class="btn" data-act="again">Revanche</button></div>')+'</div>');
 }
 function renderHud(){
-  const n=G?G.runners.length:cfg.runners;
+  const n=G&&!G.demo?G.runners.length:cfg.runners;
   $('#rdots').innerHTML=COLORS.slice(0,n).map(c=>'<i style="background:'+c+'"></i>').join('');
   $('#sR').textContent=G?G.teamScore:0;
   $('#sT').textContent=G?G.trapper.score:0;
   const P={draft:'Améliorations',place:'Pose des pièges',verify:'Vérification',countdown:'Course',run:'Course',result:'Bilan',over:'Fin de partie'};
+  if(G&&G.demo){ $('#sR').textContent=0; $('#sT').textContent=0; $('#mid').innerHTML='Traquenard<small>Menu</small>'; return; }
   if(G&&G.phase==='run'){ chronoHud(true); return; }
   $('#mid').innerHTML=G?'Manche '+G.round+' sur '+G.rounds+'<small>'+P[G.phase]+', '+G.map.name+(G.lethal?'':', sans élimination')+'</small>':'Traquenard<small>Menu</small>';
 }
@@ -2570,7 +2727,7 @@ function renderDock(){
     });
     return;
   }
-  const n=G?G.runners.length:cfg.runners;
+  const n=G&&!G.demo?G.runners.length:cfg.runners;
   let h='<div class="legend">';
   for(let i=0;i<n;i++) h+='<span><i style="background:'+COLORS[i]+'"></i>'+legendRunner(i)+'</span>';
   const running=G&&(G.phase==='run'||G.phase==='countdown');
@@ -2579,6 +2736,7 @@ function renderDock(){
 }
 
 function fit(){
+  if(document.body.classList.contains('home')){ cv.style.width=''; cv.style.height=''; return; }
   const s=$('#stage'); const aw=s.clientWidth-28, ah=s.clientHeight-28;
   let w=aw, h=w*VH/VW; if(h>ah){ h=ah; w=h*VW/VH; }
   cv.style.width=Math.max(200,w)+'px'; cv.style.height=Math.max(110,h)+'px';
@@ -2586,7 +2744,7 @@ function fit(){
 addEventListener('resize',fit);
 
 loadMap('triple');
-fit(); renderHud(); showMenu();
+fit(); renderHud(); showHome();
 requestAnimationFrame(frame);
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(G&&G.phase==='place') renderDock(); });
 </script>
