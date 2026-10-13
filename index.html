@@ -837,7 +837,7 @@ function startRun(){
   G.toast=n?{text:'Démineur : '+n+(n>1?' pièges détruits':' piège détruit'),t:2.4}:null;
   G.bullets=[]; G.pilons=[]; G.pilonCd=2; G.gateCd=2; G.finCount=0; G.endDelay=1.1; G.runT=0;
   G.aiPilonT=1.5; G.aiGateT=0; G.waitHost=false; G.res={};
-  G.runners.forEach(r=>{ r.resolved=false; r.sentRes=false; });
+  G.runners.forEach(r=>{ r.resolved=false; r.sentRes=false; r.buf=[]; r.lastSeq=0; r.off=null; });
   startGraphs();
   if(NET.on&&NET.host){ netDel('res'); netDel('ev'); }
   netSnap();
@@ -1461,14 +1461,13 @@ function botExec(r,h){
    L'hôte arbitre : il fait tourner les IA, tire les cartes, décide des phases et des scores.
    Chaque joueur simule son propre coureur et envoie sa position ; les autres sont des
    « marionnettes » interpolées. Le piégeur envoie ses pilons et herses comme événements. */
-const DB_DEFAULT='https://traquenar-c3eb7-default-rtdb.firebaseio.com';
-const DB_OLD='https://score-tp-default-rtdb.europe-west1.firebasedatabase.app';
+const DB_DEFAULT=atob('bW9jLm9pZXNhYmVyaWYuYmR0ci10bHVhZmVkLTdiZTNjLXJhbmV1cWFydC8vOnNwdHRo').split('').reverse().join('');
 const ROOT='traquenard/rooms';
 const FRAMES=['idle','run','jump','fall','land','slide'];
 function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
-NET.url=lsGet('traquenard-db',DB_DEFAULT);
-if(NET.url===DB_OLD) NET.url=DB_DEFAULT;
+NET.url=DB_DEFAULT;
+lsSet('traquenard-db','');
 NET.name=lsGet('traquenard-nom','');
 NET.pid='p'+Math.random().toString(36).slice(2,10);
 NET.view=''; NET.lastSn=-1; NET.seenEv=new Set(); NET.liveT=0; NET.beat=0; NET.off=0; NET.inflight={}; NET.placeGrace=0;
@@ -1485,7 +1484,7 @@ const netPut=(p,v)=>NET.on?fbReq('PUT',p,v):null;
 const netPatch=(p,v)=>NET.on?fbReq('PATCH',p,v):null;
 const netDel=p=>NET.on?fbReq('DELETE',p):null;
 function netError(code){
-  NET.err=(code===401||code===403)?'Accès refusé par la base : autorise la lecture et l’écriture sur le nœud traquenard.':'Base de données injoignable, vérifie l’adresse et la connexion.';
+  NET.err=(code===401||code===403)?'Accès refusé par le serveur de jeu.':'Serveur de jeu injoignable, vérifie ta connexion.';
   if(NET.view==='lobby'||NET.view==='join') renderOnline();
 }
 
@@ -1659,41 +1658,72 @@ function onEvents(){
 }
 
 /* ----- positions des coureurs ----- */
+/* Envoi : ~15 fois par seconde, jusqu'à 3 requêtes en vol. Chaque paquet porte un numéro
+   et l'heure d'envoi pour que les autres le replacent dans le temps. */
 function netLiveTick(dt){
   if(!NET.on||!G) return;
   NET.liveT-=dt;
   if(NET.liveT>0) return;
-  NET.liveT=1/12;
+  NET.liveT=1/15;
+  NET.seq=(NET.seq||0)+1;
+  const now=Math.round(performance.now());
   for(const r of G.runners){
     if(r.remote) continue;
     if(!NET.host&&r.id!==NET.idx) continue;
     const key='r'+r.id;
-    if(NET.inflight[key]) continue;
+    if((NET.inflight[key]||0)>=3) continue;
     const fr=Math.max(0,FRAMES.indexOf(runnerFrame(r)));
     const v=[Math.round(r.x),Math.round(r.y),Math.round(r.vx),Math.round(r.vy),r.facing,fr,r.alive?1:0,r.finished?1:0,
-      +(r.runPh||0).toFixed(2),r.hold>0?(r.holdKind==='glace'?2:1):0,r.stun>0?1:0,r.shield||0,r.blink>0?1:0,G.round];
-    NET.inflight[key]=true;
+      0,r.hold>0?(r.holdKind==='glace'?2:1):0,r.stun>0?1:0,r.shield||0,r.blink>0?1:0,G.round,NET.seq,now];
+    NET.inflight[key]=(NET.inflight[key]||0)+1;
     const q=netPut('live/'+key,v);
-    if(q) q.then(()=>{ NET.inflight[key]=false; }); else NET.inflight[key]=false;
+    const done=()=>{ NET.inflight[key]=Math.max(0,(NET.inflight[key]||1)-1); };
+    if(q) q.then(done,done); else done();
   }
 }
+/* Réception : on garde un petit historique horodaté par coureur distant */
 function onLive(){
-  const L=NET.room.live||{};
+  const L=NET.room.live||{}, recv=performance.now();
   for(const r of G.runners){
     if(!r.remote) continue;
-    const v=L['r'+r.id];
-    if(v&&toArr(v)[13]===G.round) r.net=toArr(v);
+    const raw=L['r'+r.id]; if(!raw) continue;
+    const v=toArr(raw);
+    if(v[13]!==G.round||!(v[14]>(r.lastSeq||0))) continue;
+    r.lastSeq=v[14];
+    const B=r.buf||(r.buf=[]);
+    const off=recv-v[15];
+    r.off=r.off==null?off:Math.min(off,r.off+3);   /* décalage d'horloge, relâché doucement */
+    B.push({t:v[15],v});
+    if(B.length>30) B.shift();
   }
 }
+const INTERP_DELAY=140;   /* on affiche les autres avec ce retard (ms) pour toujours avoir deux points à relier */
 function puppetStep(r,dt){
-  const v=r.net; if(!v) return;
-  const k=Math.min(1,dt*14);
-  if(Math.abs(v[0]-r.x)>160||Math.abs(v[1]-r.y)>160){ r.x=v[0]; r.y=v[1]; }
-  else{ r.x+=(v[0]-r.x)*k; r.y+=(v[1]-r.y)*k; }
-  r.vx=v[2]; r.vy=v[3]; r.facing=v[4]||1; r.netFr=FRAMES[v[5]]||'idle';
+  const B=r.buf; if(!B||!B.length) return;
+  const rt=performance.now()-r.off-INTERP_DELAY;
+  let a=B[0], b=null;
+  for(let i=B.length-1;i>=0;i--){ if(B[i].t<=rt){ a=B[i]; b=B[i+1]||null; break; } }
+  let x,y,vx,vy;
+  const A=a.v;
+  if(b&&rt>=a.t){
+    const V=b.v, k=(rt-a.t)/Math.max(1,b.t-a.t);
+    if(Math.abs(V[0]-A[0])>160||Math.abs(V[1]-A[1])>160){ x=A[0]; y=A[1]; }   /* téléportation : pas de glissé */
+    else{ x=A[0]+(V[0]-A[0])*k; y=A[1]+(V[1]-A[1])*k; }
+    vx=A[2]+(V[2]-A[2])*k; vy=A[3]+(V[3]-A[3])*k;
+  } else {
+    /* plus de paquet récent : on prolonge le mouvement un court instant */
+    const e=Math.max(0,Math.min(.2,(rt-a.t)/1000));
+    x=A[0]+A[2]*e; y=A[1]+A[3]*e+(A[6]&&!A[7]&&A[5]>=2&&A[5]<=3?.5*1900*e*e:0);
+    vx=A[2]; vy=A[3];
+    if(rt<a.t){ x=A[0]; y=A[1]; }
+  }
+  if(r.x==null||Math.abs(x-r.x)>200||Math.abs(y-r.y)>200){ r.x=x; r.y=y; }
+  else{ const k=Math.min(1,dt*25); r.x+=(x-r.x)*k; r.y+=(y-r.y)*k; }
+  r.vx=vx; r.vy=vy; r.facing=A[4]||1; r.netFr=FRAMES[A[5]]||'idle';
   r.onGround=r.netFr==='idle'||r.netFr==='run'||r.netFr==='land';
-  if(!r.resolved){ r.alive=!!v[6]; r.finished=!!v[7]; }
-  r.runPh=v[8]||0; r.hold=v[9]?1:0; r.holdKind=v[9]===2?'glace':''; r.stun=v[10]?1:0; r.shield=v[11]||0; r.blink=v[12]?1:0;
+  if(r.netFr==='run') r.runPh=(r.runPh||0)+Math.abs(vx)*dt*.042;   /* jambes animées localement */
+  if(!r.resolved){ r.alive=!!A[6]; r.finished=!!A[7]; }
+  r.hold=A[9]?1:0; r.holdKind=A[9]===2?'glace':''; r.stun=A[10]?1:0; r.shield=A[11]||0; r.blink=A[12]?1:0;
 }
 
 /* ----- client : application de l'état de l'hôte ----- */
@@ -1749,7 +1779,7 @@ function applySnap(s){
       G.runRound=s.round;
       hideOverlay();
       setTraps(s.traps); resetGates();
-      G.runners.forEach(r=>{ resetRunner(r); r.resolved=false; r.sentRes=false; r.net=null; });
+      G.runners.forEach(r=>{ resetRunner(r); r.resolved=false; r.sentRes=false; r.buf=[]; r.lastSeq=0; r.off=null; });
       G.phase='countdown'; G.timer=COUNTDOWN; G.goalZ=goalZone();
       G.bullets=[]; G.pilons=[]; G.pilonCd=2; G.gateCd=2; G.finCount=0; G.endDelay=1.1; G.runT=0; G.waitHost=false; G.toast=null;
       NET.seenEv=new Set(Object.keys(NET.room.ev||{}));
@@ -1816,9 +1846,8 @@ function randomCode(){ const A='ABCDEFGHJKLMNPQRSTUVWXYZ'; let c=''; for(let i=0
 function showOnline(){ NET.view=NET.on?'lobby':'join'; renderOnline(); }
 function esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function readJoinForm(){
-  const n=$('#netName'), u=$('#netUrl');
+  const n=$('#netName');
   if(n){ NET.name=n.value.trim().slice(0,14)||'Joueur'; lsSet('traquenard-nom',NET.name); }
-  if(u&&u.value.trim()){ NET.url=u.value.trim(); lsSet('traquenard-db',NET.url); }
 }
 async function netEnter(code,create){
   NET.code=code; NET.err='';
@@ -1873,8 +1902,6 @@ function renderOnline(){
       '<div class="opts"><label for="netName">Pseudo</label><input id="netName" maxlength="14" value="'+esc(NET.name)+'" placeholder="Ton pseudo">'+
       '<label for="netCode">Code</label><input id="netCode" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;max-width:140px"></div>'+
       (NET.err?'<p class="netmsg">'+esc(NET.err)+'</p>':'')+
-      '<details class="small"><summary>Base de données</summary><p class="small">Adresse Firebase Realtime Database. Les salons sont rangés sous le nœud traquenard.</p>'+
-      '<input id="netUrl" style="width:100%" value="'+esc(NET.url)+'"></details>'+
       '<div class="row-end" style="margin-top:14px"><button class="btn alt" data-act="net" data-n="back">Retour</button>'+
       '<button class="btn alt" data-act="net" data-n="join">Rejoindre</button><button class="btn" data-act="net" data-n="create">Créer un salon</button></div></div>';
     ov.hidden=false;
