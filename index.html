@@ -168,6 +168,15 @@ kbd{font-family:Bungee;font-size:13px;background:var(--paper);border:2px solid v
   .opts{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){ .tool[aria-pressed="true"],.card.sel{transform:none} }
+#press{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;background:radial-gradient(ellipse at center,rgba(28,19,13,.45),rgba(28,19,13,.85));cursor:pointer;transition:opacity .35s}
+#press.out{opacity:0;pointer-events:none}
+#press .logo{font-size:clamp(34px,6vw,78px);margin:0;flex-wrap:nowrap}
+#press .logo span{animation:tile 3.2s ease-in-out infinite;animation-delay:calc(var(--i)*-.32s)}
+#press p{font-family:Bungee,sans-serif;color:var(--paper);font-size:clamp(14px,1.6vw,20px);letter-spacing:.06em;margin:0;animation:blinkp 1.4s ease-in-out infinite}
+@keyframes blinkp{50%{opacity:.35}}
+body.gated #ov{opacity:0;pointer-events:none}
+#ov{transition:opacity .35s}
+@media (prefers-reduced-motion:reduce){ #press p,#press .logo span{animation:none} }
 </style>
 </head>
 <body>
@@ -320,6 +329,19 @@ function fadeMusic(to,ms,done){
     if(k>=1){ clearInterval(bgmFade); if(done) done(); }
   },30);
 }
+/* Écran « appuie pour commencer » : les navigateurs bloquent le son avant un premier clic ou une touche */
+function pressGate(){
+  if(!OPT.music||!bgm||!bgm.paused||bgmBroken||!document.body.classList.contains('home')||document.getElementById('press')) return;
+  const d=document.createElement('div'); d.id='press'; d.setAttribute('role','button'); d.tabIndex=0;
+  d.innerHTML='<h1 class="logo" aria-label="Traquenard">'+logoHTML()+'</h1><p>Clique ou appuie sur une touche</p>';
+  document.body.classList.add('gated'); document.body.appendChild(d); d.focus({preventScroll:true});
+  const go=e=>{
+    if(e){ e.preventDefault(); e.stopImmediatePropagation(); }
+    removeEventListener('keydown',go,true); d.removeEventListener('pointerdown',go);
+    syncMusic(); d.classList.add('out'); document.body.classList.remove('gated'); setTimeout(()=>{ d.remove(); const b=ov.querySelector('.home-nav button'); if(b) b.focus({preventScroll:true}); },350);
+  };
+  addEventListener('keydown',go,true); d.addEventListener('pointerdown',go);
+}
 function syncMusic(){
   if(musicWanted()){
     if(!bgm){
@@ -345,7 +367,7 @@ function syncMusic(){
   }
 }
 try{ new MutationObserver(syncMusic).observe(document.body,{attributes:true,attributeFilter:['class']}); }catch(e){}
-['pointerdown','keydown','touchstart'].forEach(t=>addEventListener(t,()=>{ if(bgm&&!bgm.paused&&!bgm.dataset.out) return; syncMusic(); },true));
+['pointerdown','pointerup','click','touchend','keydown','keyup'].forEach(t=>addEventListener(t,()=>{ if(bgm&&!bgm.paused&&!bgm.dataset.out) return; syncMusic(); },true));
 document.addEventListener('visibilitychange',syncMusic);
 /* État réseau (mode en ligne) */
 const NET={on:false,host:false,seat:null,idx:-1,pid:'',name:'',code:'',url:'',room:{},es:null,sn:0,status:'',err:''};
@@ -2800,7 +2822,7 @@ function fit(){
 addEventListener('resize',fit);
 
 loadMap('triple');
-fit(); renderHud(); showHome(); syncMusic();
+fit(); renderHud(); showHome(); syncMusic(); setTimeout(pressGate,350);
 requestAnimationFrame(frame);
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(G&&G.phase==='place') renderDock(); });
 </script>
