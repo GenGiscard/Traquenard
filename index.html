@@ -965,11 +965,10 @@ setInterval(syncCorner,120);
    au-dessus du parcours et active chaque piège en appuyant sur le bouton placé au-dessus. */
 let dynGrid=null, DR={traps:[],crumble:[],rot:[],doors:[]};
 const DR_CD=6;   /* recharge d'un piège (s) */
-const DR_EXCL=new Set(['demineur','passe','plot','debouche','poele','leger','detecteur','antiglu','pistolet','antigel','lest','balise']);
+const DR_EXCL=new Set(['sablier','demineur','passe','plot','debouche','poele','leger','detecteur','antiglu','pistolet','antigel','lest','balise']);
 const DR_TAUG=[
   {id:'forge',name:'Vérins huilés',desc:'Tes pièges se rechargent 1 s plus vite.',r:0,max:3},
   {id:'herse',name:'Pièges tenaces',desc:'Tes pièges restent actifs 0,4 s de plus.',r:0,max:2},
-  {id:'chrono',name:'Chrono serré',desc:'Temps limite réduit de 6 s.',r:0,max:3},
   {id:'sprintw',name:'Baskets du gardien',desc:'Tu cours 15 % plus vite dans ta galerie.',r:0,max:3},
   {id:'verglas',name:'Verglas',desc:'Les coureurs adhèrent moins au sol.',r:1,max:1},
   {id:'prime',name:'Prime',desc:'Si au moins un coureur n’arrive pas : +1 point.',r:1,max:1},
@@ -1281,7 +1280,8 @@ const ACT={
   again(){ newGame(); },
   menu(){ G=null; showHome(); },
   home(){ clearAsk=false; showHome(); },
-  solo(){ renderMenu(); const b=ov.querySelector('[data-act=start]'); if(b) b.focus({preventScroll:true}); },
+  deathrun(){ cfg.mode='D'; if(MAPS[cfg.map]&&!MAPS[cfg.map].dr) cfg.map='alea'; renderMenu(); const b=ov.querySelector('[data-act=start]'); if(b) b.focus({preventScroll:true}); },
+  solo(){ if(cfg.mode==='D'){ cfg.mode='L'; if(MAPS[cfg.map]&&MAPS[cfg.map].dr) cfg.map='alea'; } renderMenu(); const b=ov.querySelector('[data-act=start]'); if(b) b.focus({preventScroll:true}); },
   howto(){ renderHowTo(); },
   records(){ renderRecords(); },
   options(){ renderOptions(); },
@@ -1452,7 +1452,7 @@ function startDemo(){
 }
 
 function runnerStats(a){
-  return {speed:282*PACE*(1+.1*(a.sprint||0)), jump:660*PACE*(1+.07*(a.saut||0)), grav:1900*PACE*PACE*(1-.08*(a.plume||0)),
+  return {speed:282*PACE*(1+.1*(a.sprint||0)), jump:(G&&G.deathrun?660:705)*PACE*(1+.07*(a.saut||0)), grav:1900*PACE*PACE*(1-.08*(a.plume||0)),
     air:a.double?1:0, dash:!!a.dash, grip:a.ventouse||0, shield:a.bouclier||0, second:a.seconde?1:0,
     antiglu:!!a.antiglu, ignifuge:!!a.ignifuge, leger:!!a.leger, blinde:!!a.blinde, antigel:!!a.antigel,
     casque:!!a.casque, lest:a.lest||0, balise:!!a.balise, size:1-.12*(a.mini||0)};
@@ -1768,6 +1768,7 @@ function prepareTraps(){
 
 /* ---------- Course ---------- */
 function runTime(){
+  if(G.deathrun) return Infinity;
   const [l,n]=G.map.lim, c=G.trapper.aug.chrono||0, sab=4*G.runners.reduce((a,r)=>a+(r.aug.sablier||0),0);
   return (G.lethal?Math.max(l*.6,l-6*c):Math.max(n*.65,n-4*c))+sab;
 }
@@ -3451,7 +3452,7 @@ let chronoTxt='';
 function chronoHud(force){
   const lim=runTime(), left=Math.max(0,G.timer), urgent=left<10;
   const rec=REC[recKey()];
-  const html='<span class="chrono'+(urgent?' urgent':'')+'">'+fmt(G.runT)+' s</span>'+
+  const html=G.deathrun?'<span class="chrono">'+fmt(G.runT)+' s</span><small>Sans limite de temps</small>':'<span class="chrono'+(urgent?' urgent':'')+'">'+fmt(G.runT)+' s</span>'+
     '<small>Limite '+Math.ceil(left)+' s'+(rec?', record '+fmt(rec)+' s':'')+'</small>'+
     '<span class="bar'+(urgent?' urgent':'')+'"><i style="width:'+(left/lim*100).toFixed(1)+'%"></i></span>';
   if(force||html!==chronoTxt){ chronoTxt=html; $('#mid').innerHTML=html; }
@@ -3587,6 +3588,7 @@ function showHome(){
     '<p class="tagline">Un piégeur. Trois coureurs. Une seule sortie.</p>'+
     '<nav class="home-nav" aria-label="Menu principal">'+
       '<button data-act="solo">Solo<small>Contre l’IA ou à plusieurs sur un clavier</small></button>'+
+      '<button data-act="deathrun">Deathrun<small>Parcours piégé : le piégeur déclenche, les coureurs foncent</small></button>'+
       '<button data-act="online">En ligne<small>Salon privé, chacun sur son écran</small></button>'+
       '<button data-act="howto">Comment jouer</button>'+
       '<button data-act="records">Records</button>'+
