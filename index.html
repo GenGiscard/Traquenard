@@ -2979,7 +2979,7 @@ function voteInner(){
 }
 function voteRefresh(){
   const el=document.getElementById('votebox'); if(!el||!G||!G.voteC) return;
-  const h=voteInner(); if(h===voteKey) return; voteKey=h; el.innerHTML=h;
+  const h=voteInner(); if(h===voteKey) return; voteKey=h; morphInner(el,h);
 }
 setInterval(voteRefresh,300);
 function voteCast(i){
@@ -3302,13 +3302,14 @@ function morphNode(a,b){
   for(let i=0;i<B.length;i++){ if(i<A.length) morphNode(A[i],B[i]); else a.appendChild(B[i]); }
   for(let i=B.length;i<A.length;i++) A[i].remove();
 }
+function morphInner(el,html){ const w=el.cloneNode(false); w.innerHTML=html; const s=el.scrollTop; morphNode(el,w); el.scrollTop=s; }
 function ovSet(html){
   const t=document.createElement('template'); t.innerHTML=html;
   const nw=t.content.firstElementChild, old=ov.firstElementChild;
-  if(old&&nw&&ov.children.length===1&&t.content.children.length===1&&old.nodeName===nw.nodeName&&old.className.split(' ')[0]===nw.className.split(' ')[0]&&!ov.hidden){
-    const s=old.scrollTop; morphNode(old,nw); if(ov.firstElementChild===old) old.scrollTop=s;
-  } else ov.innerHTML=html;
-  ov.hidden=false;
+  if(old&&nw&&ov.children.length===1&&t.content.children.length===1&&old.nodeName===nw.nodeName&&old.className===nw.className&&(old.querySelector('h2')||{}).textContent===(nw.querySelector('h2')||{}).textContent&&!ov.hidden){
+    const s=old.scrollTop, so=ov.scrollTop; morphNode(old,nw); if(ov.firstElementChild===old) old.scrollTop=s; ov.scrollTop=so; ov.hidden=false; return true;
+  }
+  ov.innerHTML=html; ov.hidden=false; return false;
 }
 
 let padsOk=true;
@@ -6615,7 +6616,7 @@ function render(){
 
 /* ---------- Interface HTML ---------- */
 const ov=$('#ov'), dock=$('#dock');
-function showOverlay(html){ ov.innerHTML=html; ov.hidden=false; const b=ov.querySelector('.btn'); if(b&&b.focus) b.focus({preventScroll:true}); }
+function showOverlay(html){ if(ovSet(html)) return; const b=ov.querySelector('.btn'); if(b&&b.focus) b.focus({preventScroll:true}); }
 function hideOverlay(){ if(document.activeElement&&ov.contains(document.activeElement)) document.activeElement.blur(); ov.hidden=true; ov.innerHTML=''; }
 function seg(k,opts){
   return '<div class="seg">'+opts.map(([v,l])=>'<button data-act="opt" data-k="'+k+'" data-v="'+v+'" aria-pressed="'+(String(cfg[k])===String(v))+'">'+l+'</button>').join('')+'</div>';
@@ -6794,7 +6795,7 @@ function renderDraft(){
     ov.hidden=false; const b=ov.querySelector('[data-act=reveal]'); if(b) b.focus({preventScroll:true});
     return;
   }
-  let h='<div class="sheet wide"><h2>Manche '+G.round+' sur '+G.rounds+' : une amélioration chacun</h2>'+drMapLine()+rotLine()+modHTML()+
+  let h='<div class="sheet wide draftsheet"><h2>Manche '+G.round+' sur '+G.rounds+' : une amélioration chacun</h2>'+drMapLine()+rotLine()+modHTML()+
     (isSpec()?'<p>Tu regardes la partie : chaque joueur choisit son amélioration en secret.</p>':IS_TOUCH?'<p class="tapnote">Touche une carte pour la choisir.</p>':'<p>Coureurs : gauche et droite pour choisir, saut pour valider. Piégeur : clic sur une carte.</p>');
   const row=(who,x,owner,color,head,stTxt)=>{
     const other=secretRow(who);
@@ -6816,7 +6817,7 @@ function renderDraft(){
   const t=d.t;
   const st=t.done?'Choisi':t.ai?'IA en réflexion':secretRow('t')?'Choix en cours':(d.boostT?'Rareté augmentée':'Clic sur une carte');
   h+=row('t',t,G.trapper,TRAPPER_COLOR,'<b>Piégeur'+(t.ai?' IA':'')+'</b>',st)+'</div>';
-  ov.innerHTML=h; ov.hidden=false; paintTrapArt(ov);
+  ovSet(h); paintTrapArt(ov);
 }
 function augList(aug,pool){
   if(pool===TAUG&&G&&G.deathrun) pool=DR_TAUG;
