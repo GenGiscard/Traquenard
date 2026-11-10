@@ -394,6 +394,8 @@ body.editing #game{cursor:cell}
 #ov .lobby input::placeholder{color:#7D758A}
 #ov .lobby .code,#ov h2 .code{color:transparent}
 #ov .netmsg{color:#FF8A6B}
+#ov .seg{flex-wrap:wrap;max-width:100%;min-width:0;height:auto}#ov .opts>*{min-width:0}#ov .opts{grid-template-columns:120px minmax(0,1fr)}#ov .lobby2 .lright .opts{grid-template-columns:110px minmax(0,1fr)}
+.tool{color:#2B2230}.tool span,.tool em{color:inherit}.tool[aria-pressed="true"]{color:#fff}
 #ov .rtcst{font-size:13px;color:#9A8FB0;margin-top:4px}#ov .rtcst.ok{color:#7CDB6B}
 
 /* ---- v69 : thème sombre plein écran, barre d'onglets, cartes de mode, salon ---- */
@@ -3061,13 +3063,12 @@ function renderMenu(){
     (D?'':'<label>Mode fête</label>'+seg('party',[[0,'Non'],[1,'Oui, un effet surprise par manche']]))+
     '<label>Joueurs</label><div class="presets"><button data-act="preset" data-v="trap">Solo piégeur</button><button data-act="preset" data-v="run">Solo coureur</button><button data-act="preset" data-v="all">Tous humains</button><button data-act="randroles" title="Les touches ne changent pas : les joueurs échangent leurs places">Rôles au hasard</button></div>'+
     '</div>';
-  ov.innerHTML='<div class="sheet menu2 '+(D?'is-dr':'is-cons')+'"><div class="modehead"><span class="modetag">'+(D?'Deathrun':'Mode construction')+'</span><h2>'+(D?'Partie Deathrun':'Partie construction')+'</h2></div>'+
+  ovSet('<div class="sheet menu2 '+(D?'is-dr':'is-cons')+'"><div class="modehead"><span class="modetag">'+(D?'Deathrun':'Mode construction')+'</span><h2>'+(D?'Partie Deathrun':'Partie construction')+'</h2></div>'+
     '<p>'+(D?'Traverse le parcours piégé et va toucher le piégeur dans sa galerie.':'Le piégeur pose ses pièges, les coureurs foncent vers le drapeau.')+' Les places IA sont jouées par l’ordinateur, les autres se partagent le clavier.</p>'+
     main+'<div class="slots">'+slots+'</div>'+
     (cfg.draw?'<p class="drawres"><b>Tirage</b> '+cfg.draw.map(t=>'<span>'+t+'</span>').join('')+'</p>':'')+
     moreBox('more','Plus de réglages',more)+moreBox('rules','Règles',' <ul class="rules">'+rules.map(t=>'<li>'+t+'</li>').join('')+'</ul>')+
-    '<div class="row-end"><button class="btn alt back" data-act="home">Retour</button>'+(D?'':'<button class="btn alt" data-act="daily">Défi du jour</button>')+'<button class="btn" data-act="start">Jouer</button></div></div>';
-  ov.hidden=false;
+    '<div class="row-end"><button class="btn alt back" data-act="home">Retour</button>'+(D?'':'<button class="btn alt" data-act="daily">Défi du jour</button>')+'<button class="btn" data-act="start">Jouer</button></div></div>');
 }
 function renderDefis(){
   setHome(false); const D=dailyInfo(), b=maraBest();
@@ -3163,7 +3164,7 @@ function homeHub(){
 function lobbySet(html){
   if(ov.__lob===html&&ov.__lobEl&&ov.__lobEl===ov.firstElementChild&&!ov.hidden) return;
   const old=ov.querySelector('.lobby2'), st=old?old.scrollTop:0, cl=ov.querySelector('.clog'), cst=cl?cl.scrollTop:null;
-  ov.innerHTML=html; ov.__lob=html; ov.__lobEl=ov.firstElementChild; ov.hidden=false;
+  ovSet(html); ov.__lob=html; ov.__lobEl=ov.firstElementChild;
   const nw=ov.querySelector('.lobby2'); if(nw) nw.scrollTop=st;
   const ncl=ov.querySelector('.clog'); if(ncl) ncl.scrollTop=cst==null?ncl.scrollHeight:cst;
 }
@@ -3285,6 +3286,29 @@ function rtcLabel(){
   }
   const P=RTC.peers.get('host');
   return rtcOpen(P)?'Connexion directe avec le chef du salon : moins de latence.':P&&P.failed?'Connexion directe impossible : la partie passe par le serveur.':'Connexion directe au chef du salon en cours…';
+}
+
+/* ---------- Mise à jour douce des menus ----------
+   Au lieu de tout remplacer (ce qui renvoie la page en haut et fait clignoter), on ne touche
+   qu'aux morceaux qui changent : défilement, saisie en cours et focus restent en place. */
+function morphNode(a,b){
+  if(a.nodeType!==b.nodeType||a.nodeName!==b.nodeName){ a.replaceWith(b); return; }
+  if(a.nodeType!==1){ if(a.nodeValue!==b.nodeValue) a.nodeValue=b.nodeValue; return; }
+  for(const at of [...a.attributes]) if(!b.hasAttribute(at.name)) a.removeAttribute(at.name);
+  for(const at of [...b.attributes]) if(a.getAttribute(at.name)!==at.value) a.setAttribute(at.name,at.value);
+  if(a.nodeName==='DETAILS') a.open=b.hasAttribute('open');
+  if(a.nodeName==='CANVAS'){ a.replaceWith(b); return; }
+  const A=[...a.childNodes], B=[...b.childNodes];
+  for(let i=0;i<B.length;i++){ if(i<A.length) morphNode(A[i],B[i]); else a.appendChild(B[i]); }
+  for(let i=B.length;i<A.length;i++) A[i].remove();
+}
+function ovSet(html){
+  const t=document.createElement('template'); t.innerHTML=html;
+  const nw=t.content.firstElementChild, old=ov.firstElementChild;
+  if(old&&nw&&ov.children.length===1&&t.content.children.length===1&&old.nodeName===nw.nodeName&&old.className.split(' ')[0]===nw.className.split(' ')[0]&&!ov.hidden){
+    const s=old.scrollTop; morphNode(old,nw); if(ov.firstElementChild===old) old.scrollTop=s;
+  } else ov.innerHTML=html;
+  ov.hidden=false;
 }
 
 let padsOk=true;
