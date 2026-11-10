@@ -396,6 +396,16 @@ body.editing #game{cursor:cell}
 #ov .netmsg{color:#FF8A6B}
 #ov .seg{flex-wrap:wrap;max-width:100%;min-width:0;height:auto}#ov .opts>*{min-width:0}#ov .opts{grid-template-columns:120px minmax(0,1fr)}#ov .lobby2 .lright .opts{grid-template-columns:110px minmax(0,1fr)}
 .tool{color:#2B2230}.tool span,.tool em{color:inherit}.tool[aria-pressed="true"]{color:#fff}
+#ov .qchat .ctitle{grid-column:1/-1;font-family:Bungee;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 0 -2px}
+#ov .qchat .cbtns.taunt button{border-color:rgba(255,138,61,.55);color:#FFB27A}
+#ov .qchat .cmsg.taunt{color:#FFB27A;font-weight:700}
+#tauntbox{position:fixed;z-index:30;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:10px;background:#1A1422;border:2px solid #FF8A3D;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.6);width:min(320px,calc(100vw - 32px))}
+#tauntbox[hidden]{display:none}
+#tauntbox button{font:700 14px/1.2 inherit;font-family:inherit;padding:9px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#2A2235;color:#F3ECE2;cursor:pointer;text-align:left}
+#tauntbox button:hover{background:#3A2E48;border-color:#FF8A3D}
+#tauntbox button kbd{float:right;font:600 11px monospace;color:#9A8FB0;margin-left:6px}
+#tauntbox .tt{grid-column:1/-1;font-family:Bungee;font-size:11px;letter-spacing:.12em;color:#FF8A3D;text-transform:uppercase}
+
 #ov .rtcst{font-size:13px;color:#9A8FB0;margin-top:4px}#ov .rtcst.ok{color:#7CDB6B}
 
 /* ---- v69 : thème sombre plein écran, barre d'onglets, cartes de mode, salon ---- */
@@ -722,7 +732,7 @@ const MAPS={"triple":{"name":"Triple voie","rows":["############################
 /* mode : L = létal, N = non létal, absent = les deux */
 const TRAPS={
   pics:{name:'Pics',cost:1,solid:false,rot:true,mode:'L'},
-  bloc:{name:'Caisse',cost:1,solid:true,rot:false},
+  bloc:{name:'Caisse',cost:2,solid:true,rot:false},
   fragile:{name:'Planche fragile',cost:1,solid:true,rot:false,mode:'N'},
   glu:{name:'Glu',cost:1,solid:true,rot:false},
   ressort:{name:'Ressort',cost:1,solid:true,rot:false,mode:'N'},
@@ -753,7 +763,7 @@ const RAUG=[
   {id:'lest',name:'Lest',desc:'Reculs et immobilisations réduits de 30 %.',r:1,max:2,mode:'N'},
   {id:'mini',name:'Miniaturisation',desc:'Hitbox réduite de 12 %.',r:1,max:2},
   {id:'ignifuge',name:'Combinaison ignifugée',desc:'Immunisé aux lance-flammes.',r:1,max:1,mode:'L'},
-  {id:'dash',name:'Dash',desc:'Touche bas : ruée horizontale, recharge 1,5 s.',r:1,max:1},
+  {id:'dash',name:'Dash',desc:'Touche bas : ruée horizontale, recharge 2,5 s.',r:2,max:1},
   {id:'demineur',name:'Démineur',desc:'Détruit un piège au hasard au départ de chaque course.',r:1,max:3},
   {id:'double',name:'Double saut',desc:'Un saut supplémentaire en l’air.',r:2,max:1},
   {id:'seconde',name:'Seconde chance',desc:'Réapparais au départ une fois par manche.',r:2,max:1,mode:'L'},
@@ -761,10 +771,10 @@ const RAUG=[
   {id:'balise',name:'Balise',desc:'Après une chute, tu reviens sur ton dernier appui.',r:2,max:1,mode:'N'}
 ];
 const TAUG=[
-  {id:'credit',name:'Crédit',desc:'+2 points de pose par manche.',r:0,max:5},
+  {id:'credit',name:'Crédit',desc:'+1 point de pose par manche.',r:0,max:4},
   {id:'cadence',name:'Cadence',desc:'Canons 20 % plus rapides.',r:0,max:3},
   {id:'balistique',name:'Balistique',desc:'Projectiles 25 % plus rapides.',r:0,max:3},
-  {id:'chrono',name:'Chrono serré',desc:'Temps limite réduit de 6 s.',r:0,max:3,mode:'L'},
+  {id:'chrono',name:'Chrono serré',desc:'Temps limite réduit de 4 s.',r:0,max:2,mode:'L'},
   {id:'chrono',name:'Chrono serré',desc:'Temps limite réduit de 4 s.',r:0,max:3,mode:'N'},
   {id:'forge',name:'Vérins',desc:'Le pilon se recharge 1 s plus vite.',r:0,max:3},
   {id:'herse',name:'Herses lourdes',desc:'Les herses restent fermées 1 s de plus.',r:0,max:2},
@@ -1226,11 +1236,17 @@ function seeded(seed,fn){
 }
 const dailyBetter=(a,b)=>!b||a.f>b.f||(a.f===b.f&&a.t<b.t);
 const dailyTxt=(x,dr)=>x.f+(dr?' manche'+(x.f>1?'s':'')+' gagnée'+(x.f>1?'s':''):' arrivée'+(x.f>1?'s':''))+' sur 3'+(x.f?', '+fmt(x.t)+' s cumulées':'');
-const EMOTES=['Trop facile !','Oups...','Bien joué !','Grrr !'];
+const EMOTES=['Trop facile !','Oups...','Bien joué !','Grrr !','Trop lent !','Rattrape-moi !','Hé hé hé...','Même pas mal !'];
 const TAUNTS=['Hé hé hé...','Trop lent !','Au suivant !','Encore raté !','Merci d’être venu !'];
 /* qui : 0 à 2 coureurs, 3 piégeur */
-function showEmote(who,text){ if(!G) return; (G.emotes||(G.emotes=[])).push({who,text,t:2.2}); if(G.emotes.length>6) G.emotes.shift(); SFX.play('pick'); }
+function showEmote(who,text){ if(!G) return; (G.emotes||(G.emotes=[])).push({who,text,t:2.2,T:2.2}); if(G.emotes.length>6) G.emotes.shift(); SFX.play('pick'); }
 let emoteCd=0;
+function tauntBox(){ let b=document.getElementById('tauntbox'); if(b) return b;
+  b=document.createElement('div'); b.id='tauntbox'; b.hidden=true;
+  b.innerHTML='<div class="tt">Narguer</div>'+EMOTES.map((t,i)=>'<button data-act="emote" data-i="'+i+'">'+t+(IS_TOUCH?'':'<kbd>'+(i+1)+'</kbd>')+'</button>').join('');
+  document.body.appendChild(b); return b; }
+function tauntClose(){ const b=document.getElementById('tauntbox'); if(b) b.hidden=true; }
+document.addEventListener('pointerdown',e=>{ const b=document.getElementById('tauntbox'); if(b&&!b.hidden&&!b.contains(e.target)&&!e.target.closest('[data-act="taunt"]')) b.hidden=true; },true);
 function sendEmote(i){
   if(!NET.on||!G||G.demo||emoteCd>performance.now()) return;
   const who=NET.seat==='t'?7:NET.idx; if(who<0) return;
@@ -1246,7 +1262,8 @@ function drawEmotes(){
     if(ch&&ch.alive!==false&&!ch.finished){ x=(ch.x+ch.w/2-cam.x)*cam.s; y=(ch.y-34)*cam.s+offY(); }
     x=clamp(x,90,VW-90); y=clamp(y,40,VH-40);
     ctx.globalAlpha=clamp(e.t/.3,0,1);
-    pill((e.who<5||e.who===8?'':'Piégeur : ')+e.text,x,y,14,'#FBF3E1',e.who<5?(G.runners[e.who]||{}).color||INK:e.who===8?'#6B5B95':TRAPPER_COLOR);
+    const pop=e.T?Math.max(0,1-(e.T-e.t)/.25):0, sz=14+Math.round(8*pop*pop);
+    pill((e.who<5||e.who===8?'':'Piégeur : ')+e.text,x,y,sz,'#FBF3E1',e.who<5?(G.runners[e.who]||{}).color||INK:e.who===8?'#6B5B95':TRAPPER_COLOR);
     ctx.globalAlpha=1;
   }
 }
@@ -1965,7 +1982,9 @@ function specClaim(b){
 }
 
 /* ---------- Chat rapide du salon : messages tout faits uniquement (rien à modérer) ---------- */
-const QCHAT=['Salut !','Prêt !','Une minute','Je veux piéger','Qui veut piéger ?','On lance ?','Revanche ?','Bien joué !','Trop fort ce piège','Encore une !','Merci, bonne soirée','À bientôt'];
+const QCHAT=['Salut !','Prêt !','Une minute','Je veux piéger','Qui veut piéger ?','On lance ?','Revanche ?','Bien joué !','Trop fort ce piège','Encore une !','Merci, bonne soirée','À bientôt',
+  'Trop facile !','Même pas peur','Tu vas tomber…','Tes pièges sont en carton','Je suis trop rapide pour toi','Prépare-toi à perdre','C’était un échauffement','Cherche encore','Je t’attends en haut','Tu veux des conseils ?','Pas mal… pour un débutant','Rentre à la maison'];
+const QTAUNT=12;
 let chatCd=0, chatSeen=null;
 function chatList(){
   const C=NET.room.chat||{};
@@ -1974,8 +1993,8 @@ function chatList(){
 function chatHTML(){
   const P=NET.room.players||{}, L=chatList();
   const msgs=L.length?L.map(m=>{ const p=P[m.by], me=m.by===NET.pid;
-    return '<div class="cmsg'+(me?' me':'')+'"><b>'+esc(me?'Toi':(p&&p.name)||'Joueur parti')+'</b>'+QCHAT[m.i]+'</div>'; }).join(''):'<div class="cmsg empty">Pas encore de message.</div>';
-  return '<div class="qchat"><div class="clog">'+msgs+'</div><div class="cbtns">'+QCHAT.map((t,i)=>'<button data-act="qchat" data-i="'+i+'">'+t+'</button>').join('')+'</div></div>';
+    return '<div class="cmsg'+(me?' me':'')+(m.i>=QTAUNT?' taunt':'')+'"><b>'+esc(me?'Toi':(p&&p.name)||'Joueur parti')+'</b>'+QCHAT[m.i]+'</div>'; }).join(''):'<div class="cmsg empty">Pas encore de message.</div>';
+  return '<div class="qchat"><div class="clog">'+msgs+'</div><div><div class="ctitle">Messages</div><div class="cbtns">'+QCHAT.slice(0,QTAUNT).map((t,i)=>'<button data-act="qchat" data-i="'+i+'">'+t+'</button>').join('')+'</div><div class="ctitle">Narguer</div><div class="cbtns taunt">'+QCHAT.slice(QTAUNT).map((t,i)=>'<button data-act="qchat" data-i="'+(i+QTAUNT)+'">'+t+'</button>').join('')+'</div></div></div>';
 }
 function chatSend(i){
   if(!NET.on||!QCHAT[i]||chatCd>performance.now()) return;
@@ -3361,7 +3380,7 @@ function onKey(e){
     if(['place','verify','countdown','run'].includes(G.phase)&&ov.hidden){ showPause(); return; }
   }
   if(specKey(e)) return;
-  if(NET.on&&G&&!G.demo&&!(G.phase==='place'&&canTrap())){ const m=/^Digit([1-4])$/.exec(e.code); if(m){ sendEmote(+m[1]-1); return; } }
+  if(NET.on&&G&&!G.demo&&!(G.phase==='place'&&canTrap())){ const m=/^Digit([1-8])$/.exec(e.code); if(m){ sendEmote(+m[1]-1); tauntClose(); return; } }
   if(!G||G.paused||G.demo) return;
   const btnFocus=document.activeElement&&document.activeElement.tagName==='BUTTON';
   if(G.phase==='place'&&canTrap()){
@@ -3417,7 +3436,8 @@ const ICO={
   menu:'<path d="M5 7h14M5 12h14M5 17h14"/>',
   opts:'<path d="M5 7h8M17 7h2M5 17h2M11 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
   full:'<path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/>',
-  exit:'<path d="M10 4.5H5.5v15H10"/><path d="M14 8l4 4-4 4M18 12H9.5"/>'
+  exit:'<path d="M10 4.5H5.5v15H10"/><path d="M14 8l4 4-4 4M18 12H9.5"/>',
+  taunt:'<path d="M4.5 5.5h15v10h-7l-4 3.5v-3.5h-4z"/><path d="M9 9.5h.01M15 9.5h.01M9 12.5c1.8 1.4 4.2 1.4 6 0"/>'
 };
 const rbtn=(icon,act,label,extra)=>'<button class="rbtn'+(icon==='play'?' main':'')+'" data-act="'+act+'"'+(extra||'')+' aria-label="'+label+'" title="'+label+'"><svg viewBox="0 0 24 24" aria-hidden="true">'+(ICO[icon]||'')+'</svg></button>';
 const rfig=(icon,act,label,extra)=>'<figure>'+rbtn(icon,act,label,extra)+'<figcaption>'+label+'</figcaption></figure>';
@@ -3432,8 +3452,9 @@ function syncCorner(){
   const fsOK=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled)&&!document.getElementById('press');
   if(fsOK) k='fs'+(k?'|'+k:'');
   if(k!==cornerKey){
+    if(!/netmenu/.test(k)) tauntClose();
     cornerKey=k; c.hidden=!k; k=k.replace(/^fs\|?/,'');
-    c.innerHTML=(fsOK?rbtn('full','fullscreen','Plein écran'):'')+(k==='pause'?rbtn('pause','pausebtn','Pause'):k==='netmenu'?rbtn('menu','netmenu','Menu'):
+    c.innerHTML=(fsOK?rbtn('full','fullscreen','Plein écran'):'')+(k==='pause'?rbtn('pause','pausebtn','Pause'):k==='netmenu'?rbtn('taunt','taunt','Narguer (touches 1 à 8)')+rbtn('menu','netmenu','Menu'):
       k==='home'?rbtn('home','home','Accueil'):k==='leave'?rbtn('exit','net','Quitter le salon',' data-n="leave"'):'');
   }
   hpHud();
@@ -3966,6 +3987,8 @@ const ACT={
   net(b){ const f=NETACT[b.dataset.n]; if(f) f(b); },
   spec(b){ specSet(+b.dataset.i); },
   qchat(b){ chatSend(+b.dataset.i); },
+  taunt(b){ const box=tauntBox(); if(!box.hidden){ tauntClose(); return; } const r=b.getBoundingClientRect(); box.hidden=false; box.style.top=(r.bottom+8)+'px'; box.style.right=Math.max(8,innerWidth-r.right)+'px'; },
+  emote(b){ sendEmote(+b.dataset.i); tauntClose(); },
   specclaim(b){ specClaim(b); },
   lobby(){ if(NET.host) netBackToLobby(); }
 };
@@ -4046,7 +4069,7 @@ function loadMap(key){
   curGates=gates;
   /* les cases mobiles ne sont pas peintes dans le décor fixe */
   const hid=[]; if(dynGrid) for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(dynGrid[y][x]){ hid.push([x,y]); terrain[y][x]=0; }
-  drawTerrainCache(); if(!m.art&&!m.dr) drawStaticSpikes(); drawMiniBase(m,gates);
+  drawTerrainCache(); if(!m.art) drawStaticSpikes(); drawMiniBase(m,gates);
   for(const [x,y] of hid) terrain[y][x]=1;
   FAKE=[]; ONEW=null; for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(m.rows[y][x]==='F'){ terrain[y][x]=0; FAKE.push([x,y]); if(!ONEW){ ONEW=[]; for(let k=0;k<H;k++) ONEW.push(new Uint8Array(W)); } ONEW[y][x]=1; }
   return gates;
@@ -4118,7 +4141,7 @@ function startDemo(){
   const skins=SKINS.slice().sort(()=>Math.random()-.5);
   newGame({mode:'L',map,rounds:99,runners:3,ai:[true,true,true,true],skins,names:null,remote:[false,false,false]},true);
   G.demo=true; G.round=1;
-  G.trapper.points=12;
+  G.trapper.points=10;
   G.trapper.unlocked=new Set(['pics','scie','mine','canon']);
   G.trapper.aug={traqueur:1};
   for(let i=0;i<10&&aiPlaceOne(null);i++);
@@ -4253,7 +4276,7 @@ function startPlacement(){
   if(G.deathrun){ G.runners.forEach(resetRunner); startRun(); return; }
   G.phase='place'; G.timer=PLACE_TIME;
   const tp=G.trapper;
-  tp.points+=6+2*(tp.aug.credit||0)+(tp.aug.tirelire||0)+(G.aiTrap&&!G.demo?[-2,0,2][G.diff]:0);
+  tp.points+=5+(tp.aug.credit||0)+(tp.aug.tirelire||0)+(G.aiTrap&&!G.demo?[-2,0,2][G.diff]:0);
   tp.freeLeft=tp.aug.soldes?3:0;
   if(!tp.unlocked.has(G.sel)) G.sel=unlockedList()[0];
   G.runners.forEach(resetRunner);
@@ -4448,7 +4471,7 @@ function prepareTraps(){
 function runTime(){
   if(G.deathrun||G.tuto) return Infinity;
   const [l,n]=G.map.lim, c=G.trapper.aug.chrono||0, sab=4*G.runners.reduce((a,r)=>a+(r.aug.sablier||0),0);
-  return (G.lethal?Math.max(l*.6,l-6*c):Math.max(n*.65,n-4*c))+sab;
+  return (G.lethal?Math.max(l*.7,l-4*c):Math.max(n*.65,n-4*c))+sab;
 }
 function pilonCdMax(){ return Math.max(2.5,(G.lethal?7:5)-1*(G.trapper.aug.forge||0)); }
 function gateCdMax(){ return Math.max(2.5,6-1.2*(G.trapper.aug.herse2||0)); }
@@ -4485,7 +4508,7 @@ function stepRunner(r,h,I){
   if(move&&r.wallLock<=0) r.facing=move;
   const U=r.under, glue=r.onGround&&U.glu&&!st.antiglu;
   const ice=Math.max(.3,(G.trapper.aug.verglas?.3:1)*(G.mod==='glace'&&!st.antigel?MOD_K.ice:1));
-  if(I.dP){ I.dP=false; if(!busy&&st.dash&&r.dashCd<=0){ r.dashT=.16/PACE; r.dashCd=1.5; SFX.play('dash',r.x); burst(r.x+r.w/2,r.y+r.h/2,r.color,8,120); } }
+  if(I.dP){ I.dP=false; if(!busy&&st.dash&&r.dashCd<=0){ r.dashT=.16/PACE; r.dashCd=2.5; SFX.play('dash',r.x); burst(r.x+r.w/2,r.y+r.h/2,r.color,8,120); } }
   if(r.dashT>0){ r.dashT-=h; r.vx=r.facing*640*PACE; r.vy=0; }
   else{
     if(r.hold>0) r.vx=0;
