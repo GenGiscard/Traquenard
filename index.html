@@ -804,6 +804,7 @@ body.home #corner .rbtn:hover{background:rgba(42,36,54,.85);border-color:var(--a
 <script>
 'use strict';
 const T=32,H=22,VW=1280,VH=704,WH=H*T,INK='#2E2219';
+const CAN_K=2, CAN_ROT=.18, DRCAN_K=2.4;   /* canons agrandis, fût remis à l'horizontale */
 let W=40,WW=W*T;
 const DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
 const COLORS=['#2F6FD6','#3C9E4A','#E58A1F','#9B59D0','#D64F8E'];
@@ -2684,13 +2685,13 @@ function drTrapsStep(h){
     const live=trapLive(t);
     if(t.k==='cannon'){
       if(live&&t.shots>0){ t.sht-=h; if(t.sht<=0){ t.shots--; t.sht=.38;
-        const x=(t.dir>0?t.cx+1:t.cx)*T, y=t.y*T-15;
-        DR.balls.push({x,y,vx:t.dir*10.5*T,life:4}); SFX.play('cannon',x); burst(x,y,'#5A4A3C',6,90); } }
+        const x=(t.cx+.5)*T+t.dir*46, y=t.y*T-42; t.fireT=animT;
+        DR.balls.push({x,y,ty:t.y*T-31,vx:t.dir*10.5*T,vy:0,life:4,k:1.8}); SFX.play('cannon',x); burst(x,y,'#5A4A3C',6,90); } }
       if(!live) { t.shots=3; t.sht=0; }
     }
   }
   for(const b of DR.balls){
-    b.x+=b.vx*h; b.life-=h;
+    b.x+=b.vx*h; b.life-=h; if(b.ty!=null&&b.y<b.ty) b.y=Math.min(b.ty,b.y+520*h);
     const tx=Math.floor(b.x/T), ty=Math.floor(b.y/T);
     if(b.x<0||b.x>WW||(tx>=0&&tx<W&&terrain[ty]&&terrain[ty][tx])){ b.life=0; burst(b.x,b.y,'#5A4A3C',5,70); continue; }
     for(const r of G.runners){ if(r.remote||!r.alive||r.finished) continue; if(circRect(b.x,b.y,8,r)){ b.life=0; hurt(r,'Boulet'); break; } }
@@ -2721,6 +2722,12 @@ function drTrapsDraw(t){
     if(live&&OPT.parts&&Math.random()<.4) G.parts.push({x:p.x,y:p.y+SAW_R,vx:(Math.random()-.5)*160,vy:-60-Math.random()*80,life:.3,color:'#F7D046',s:2});
     return true;
   }
+  if(t.k==='cannon'&&TSPR2.canon&&TSPR2.canon.ok){
+    const e=t.fireT!=null?animT-t.fireT:9, f=e<.07?3:e<.18?4:e<.42?5:e<.6?6:warn?1+(Math.floor(animT*12)%2):0;
+    if(warn){ ctx.fillStyle='rgba(232,69,47,'+(.22+.18*Math.sin(animT*40))+')'; ctx.beginPath(); ctx.arc((t.cx+.5)*T,t.y*T-34,48,0,Math.PI*2); ctx.fill(); }
+    spr2(ctx,'canon',f,(t.cx+.5)*T,t.y*T+1,{flip:t.dir<0,sx:DRCAN_K,sy:DRCAN_K,rot:t.dir<0?-CAN_ROT:CAN_ROT});
+    return true;
+  }
   if(t.k==='cannon'){
     const x=t.cx*T, y=t.y*T-15, d=t.dir;
     ctx.save(); ctx.translate(x+(d>0?T*.5:T*.5),y); if(d<0) ctx.scale(-1,1);
@@ -2748,13 +2755,13 @@ function drTrapsDraw(t){
   return false;
 }
 function drBallsDraw(){
-  for(const b of DR.balls){ ctx.fillStyle='#2E2A28'; ctx.strokeStyle=INK; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,8,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  for(const b of DR.balls){ if(ballSprite(ctx,b)) continue; ctx.fillStyle='#2E2A28'; ctx.strokeStyle=INK; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,8,0,Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(b.x-3,b.y-3,2.5,0,Math.PI*2); ctx.fill(); }
 }
 /* point d'ancrage du câble vers le bouton */
 function drTrapAnchor(t){
   if(t.k==='saw') return [(t.x0+.5)*T,t.y*T-SAW_R*2-4];
-  if(t.k==='cannon') return [(t.cx+.5)*T,t.y*T-28];
+  if(t.k==='cannon') return [(t.cx+.5)*T-t.dir*18,t.y*T-58];
   if(t.k==='fan') return [t.dir>0?t.x0*T-7:(t.x1+1)*T+7,t.y0*T];
   return null;
 }
@@ -3469,7 +3476,7 @@ const rkUrl=u=>NET.url.replace(/\/+$/,'')+'/traquenard/rank'+(u?'/'+u:'')+'.json
 const rkVal=(o,c)=>o&&typeof o[c]==='number'?o[c]:RK_START;
 const rkGames=(o,c)=>o&&typeof o[c+'g']==='number'?o[c+'g']:0;
 function rkTier(r){ let t=RK_TIERS[0]; for(const x of RK_TIERS) if(r>=x.min) t=x; return t; }
-function rkDiv(r){ const i=RK_TIERS.indexOf(rkTier(r)), t=RK_TIERS[i], nx=RK_TIERS[i+1]; if(!nx||i>=6) return ''; return ['III','II','I'][Math.min(2,Math.floor((r-t.min)/((nx.min-t.min)/3)))]; }
+function rkDiv(r){ const i=RK_TIERS.indexOf(rkTier(r)), t=RK_TIERS[i], nx=RK_TIERS[i+1]; if(!nx||i>=6) return ''; return ['3','2','1'][Math.min(2,Math.floor((r-t.min)/((nx.min-t.min)/3)))]; }
 function rkName(r,g){ return g<RK_PLACE?'Placement '+g+'/'+RK_PLACE:rkTier(r).n+(rkDiv(r)?' '+rkDiv(r):''); }
 function rkBadge(o,c,big){
   const r=rkVal(o,c), g=rkGames(o,c), t=g<RK_PLACE?{c:'#7D7390'}:rkTier(r), cat=RK_CATS.find(x=>x[0]===c)||RK_CATS[0];
@@ -3537,7 +3544,7 @@ function renderRanked(){
     '<div class="rkqmodes"><button class="btn rkqbtn tr" data-act="rkq" data-v="t"'+(GRP&&(GRP.lead!==NET.pid||grpActive().length)?' disabled':'')+'><b>File piégeur</b><small>Seul contre l’équipe de coureurs · ton rang '+rkBadge(MYRK,(rkMode==='D'?'d':'c')+'t')+'</small></button>'+
     '<button class="btn rkqbtn ru" data-act="rkq" data-v="r"'+(GRP&&GRP.lead!==NET.pid?' disabled':'')+'><b>File coureur'+(GRP&&grpActive().length?' en groupe ('+(1+grpActive().length)+')':'')+'</b><small>Seul ou avec ton groupe · ton rang '+rkBadge(MYRK,(rkMode==='D'?'d':'c')+'r')+'</small></button></div>'+
     '<h3>Groupe de coureurs</h3>'+grpHTML()+(NET.err&&!NET.on?'<p class="netmsg">'+esc(NET.err)+'</p>':'')+
-    '<h3>Paliers</h3>'+tiers+
+    '<h3>Paliers</h3><p class="small">Dans chaque palier on commence au niveau 3, puis 2, puis 1 avant de passer au palier suivant : Bronze 3, Bronze 2, Bronze 1, puis Argent 3. Maître et Légende n’ont pas de niveaux.</p>'+tiers+
     '<h3>Meilleurs joueurs</h3><div class="seg">'+RK_CATS.map(([c,m,r])=>'<button data-act="rkcat" data-v="'+c+'" aria-pressed="'+(rkCat===c)+'">'+r+' '+m+'</button>').join('')+'</div>'+board+
     '<div class="row-end"><button class="btn alt" data-act="rkrefresh">Actualiser</button><button class="btn alt" data-act="home">Accueil</button></div></div>');
 }
@@ -4015,9 +4022,9 @@ function trapSprite2(c,type,x,y,dir,tm){
       if(e<.07) f=3; else if(e<.18) f=4; else if(e<.42) f=5; else if(tm.cd!=null&&tm.cd<.45) f=1+(Math.floor(animT*12)%2); else f=e<.6?6:0; }
     const a=tm&&tm.aim?tm.aim:DIRS[dir], ax=a[0], ay=a[1];
     if(ay>0&&ay>Math.abs(ax)*1.4){   /* tir vers le bas : on fait pivoter le canon */
-      return spr2(c,'canon',f,cx,y+T/2,{rot:Math.PI/2,ay:.62});
+      return spr2(c,'canon',f,cx,y+T/2,{rot:Math.PI/2,ay:.62,sx:CAN_K,sy:CAN_K});
     }
-    return spr2(c,'canon',f,cx,by,{flip:ax<0});
+    return spr2(c,'canon',f,cx,by+1,{flip:ax<0,sx:CAN_K,sy:CAN_K,rot:ax<0?-CAN_ROT:CAN_ROT});
   }
   if(type==='ressort'){
     const S=TSPR2.ressort; if(!S||!S.ok) return false;
@@ -4052,9 +4059,9 @@ function sawSprite(c,px,py,dir,spin){
 }
 function ballSprite(c,b){
   const S=TSPR2.boulet; if(!S||!S.ok) return false;
-  const f=Math.floor(animT*12)%2, x0=S.cw/2-44, wsrc=60, w=wsrc/TS2X, h=S.ch/TS2X;
+  const f=Math.floor(animT*12)%2, x0=S.cw/2-44, wsrc=60, k=b.k||1.3, w=wsrc/TS2X*k, h=S.ch/TS2X*k;
   c.save(); c.translate(b.x,b.y); c.rotate(Math.atan2(b.vy,b.vx));
-  c.drawImage(S.img,f*S.cw+x0,0,wsrc,S.ch,-44/TS2X,-h/2,w,h); c.restore(); return true;
+  c.drawImage(S.img,f*S.cw+x0,0,wsrc,S.ch,-44/TS2X*k,-h/2,w,h); c.restore(); return true;
 }
 
 /* ---------- Sprites, troisième série (canon à glace, bloc de glace, pics surgissants, pilon) ---------- */
@@ -5593,7 +5600,7 @@ function updateTraps(h){
       if(t.cd<=0){
         t.cd=2.4*Math.pow(.8,tp.cadence||0);
         const sp=(G.lethal?300:340)*(1+.25*(tp.balistique||0)), [dx,dy]=t.aim;
-        t.fireT=animT; SFX.play('cannon',cx); G.bullets.push({x:cx+dx*26,y:cy+dy*26,vx:dx*sp,vy:dy*sp,life:6});
+        t.fireT=animT; SFX.play('cannon',cx); const hz=Math.abs(dy)<.3; G.bullets.push({x:cx+dx*(hz?38:26),y:cy+dy*26-(hz?12:0),vx:dx*sp,vy:dy*sp,life:6});
       }
     }
     if(t.type==='mine'&&t.fuse>=0){
