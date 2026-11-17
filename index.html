@@ -474,6 +474,7 @@ html body.has-topnav #topnav{padding-right:170px}
 #ov .rkqp small{color:#9A8FB0;font-size:12px;margin-left:4px}
 
 #tauntbox .emf{display:inline-block;width:22px;height:22px;vertical-align:-6px;margin-right:6px;background-image:var(--emo);background-size:800% 100%;background-repeat:no-repeat}
+#bugview{position:fixed;inset:0;z-index:80;background:rgba(8,5,12,.9);display:grid;place-items:center;padding:16px}#bugview>div{max-width:min(1200px,100%);display:flex;flex-direction:column;gap:10px;align-items:center;color:#EDE3D0}#bugview img{max-width:100%;max-height:78vh;border:2px solid #F5B841;border-radius:10px}
 #ov .rtcst{font-size:13px;color:#9A8FB0;margin-top:4px}#ov .rtcst.ok{color:#7CDB6B}
 
 /* ---- v69 : thème sombre plein écran, barre d'onglets, cartes de mode, salon ---- */
@@ -3640,6 +3641,24 @@ async function bugOpen(){
 }
 function bugClose(){ const b=document.getElementById('bugbox'); if(b) b.hidden=true; }
 function bugDownload(){ if(!bugShot) return; const a=document.createElement('a'); a.href=bugShot; a.download='traquenard-bug.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
+function bugSmall(src){ return new Promise(res=>{ const im=new Image(); im.onload=()=>{ const k=Math.min(1,1100/im.width), c=document.createElement('canvas'); c.width=Math.round(im.width*k); c.height=Math.round(im.height*k); c.getContext('2d').drawImage(im,0,0,c.width,c.height); let q=.72, d=c.toDataURL('image/jpeg',q); while(d.length>550000&&q>.3){ q-=.12; d=c.toDataURL('image/jpeg',q); } res(d); }; im.onerror=()=>res(null); im.src=src; }); }
+async function bugUpload(shot){
+  try{
+    if(!NET.url) return null;
+    const d=await bugSmall(shot); if(!d) return null;
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+    const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9000);
+    const r=await fetch(NET.url.replace(/\/+$/,'')+'/traquenard/bugs/'+id+'.json',{method:'PUT',body:JSON.stringify({img:d,ts:{'.sv':'timestamp'}}),signal:ctl.signal});
+    clearTimeout(to); return r.ok?id:null;
+  }catch(e){ return null; }
+}
+/* lien ?bug=… : affiche la capture d'un signalement */
+(function(){ const id=new URLSearchParams(location.search).get('bug'); if(!id||!/^[a-z0-9]{6,20}$/.test(id)) return;
+  setTimeout(()=>{ fetch(NET.url.replace(/\/+$/,'')+'/traquenard/bugs/'+id+'.json').then(r=>r.ok?r.json():null).then(o=>{
+    const v=document.createElement('div'); v.id='bugview';
+    v.innerHTML=o&&typeof o.img==='string'&&o.img.startsWith('data:image/jpeg;base64,')?'<div><p>Capture du signalement'+(o.ts?' du '+new Date(o.ts).toLocaleString('fr-FR'):'')+'</p><img alt="Capture du bug"><button class="btn" type="button">Fermer</button></div>':'<div><p>Capture introuvable.</p><button class="btn" type="button">Fermer</button></div>';
+    const img=v.querySelector('img'); if(img) img.src=o.img;
+    v.querySelector('button').onclick=()=>v.remove(); document.body.appendChild(v); }).catch(()=>{}); },400); })();
 async function bugSend(){
   if(!BUG_TO) await bugCfg();
   const b=bugBox(), txt=b.querySelector('#bugtxt').value.trim(), mail=b.querySelector('#bugmail').value.trim(), msg=b.querySelector('#bugmsg');
@@ -3654,6 +3673,8 @@ async function bugSend(){
   const add=(n,v)=>{ const i=document.createElement('input'); i.type='hidden'; i.name=n; i.value=v; f.appendChild(i); };
   add('_subject','Traquenard : bug signalé'); add('_captcha','false'); add('_template','box');
   add('Description',txt); add('Contact',mail||'non renseigné'); add('Infos',infos);
+  /* la capture est aussi déposée sur le serveur du jeu : le lien marche même si la pièce jointe se perd */
+  if(bugShot&&b.querySelector('#bugwith').checked){ const id=await bugUpload(bugShot); if(id) add('Capture',location.origin+location.pathname+'?bug='+id); }
   let withShot=false;
   if(bugShot&&b.querySelector('#bugwith').checked){
     try{ const bin=atob(bugShot.split(',')[1]), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
