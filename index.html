@@ -457,6 +457,22 @@ body.touch #abil .abt{display:none}
 #bugbox .bugmsg a{color:#7FC8FF}
 #bugbox .bugrow{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 
+#ov .rkqsheet{max-width:640px}
+#ov .rkqspin{width:54px;height:54px;margin:10px auto 6px;border-radius:50%;border:5px solid rgba(245,184,65,.2);border-top-color:#F5B841;animation:rkqspin 1s linear infinite}
+@keyframes rkqspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#ov .rkqspin{animation-duration:3s}}
+#ov .rkqn{text-align:center;font-family:Bungee,inherit;font-size:20px;margin:4px 0}
+#ov .rkqsheet .autocd{text-align:center}
+#ov .rkqlist{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+#ov .rkqp{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.28)}
+#ov .rkqp b{margin-right:auto}
+#ov .rkqmodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:8px 0 14px}
+#ov .rkqmodes .btn{padding:14px 16px;font-size:17px}
+html body.has-topnav #corner{position:fixed;top:6px;right:12px;z-index:61}
+html body.has-topnav #corner .rbtn{width:40px;height:40px}
+html body.has-topnav #topnav{padding-right:170px}
+#ov .rkqp small{color:#9A8FB0;font-size:12px;margin-left:4px}
+
 #ov .rtcst{font-size:13px;color:#9A8FB0;margin-top:4px}#ov .rtcst.ok{color:#7CDB6B}
 
 /* ---- v69 : thème sombre plein écran, barre d'onglets, cartes de mode, salon ---- */
@@ -1058,6 +1074,7 @@ const inRect=(tx,ty,r)=>tx>=r[0]&&tx<r[0]+r[2]&&ty>=r[1]&&ty<r[1]+r[3];
 const fmt=v=>v.toFixed(1).replace('.',',');
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+if(typeof window!=='undefined') setTimeout(()=>{ if(cfg.mode==='N') cfg.mode='L'; },0);
 let cfg={roles:1,party:0,diff:1,runners:3,rounds:7,map:'rot',mode:'D',ai:[false,true,true,true,true,true],skins:['blob','yeti','peng','frog','robo']};
 /* Options du joueur, gardées dans ce navigateur */
 const OPT={autofs:true,shake:true,parts:true,labels:true,music:true,sfx:true,gmusic:true,ghost:true,cb:false,trail:'',orn:''};
@@ -2072,7 +2089,7 @@ function lobbyPub(force){
   if(!m.pub){ if(pubLast){ pubLast=''; fetch(pubUrl(NET.code),{method:'DELETE'}).catch(()=>{}); } return; }
   const me=(NET.room.players||{})[NET.pid]||{};
   const mapn=m.map==='alea'||!m.map?'Au hasard':(MAPS[m.map]?MAPS[m.map].name:(m.mapname||'Carte perso'));
-  const d={n:String(me.name||NET.name||'Hôte').slice(0,14),p:Math.min(8,activePlayers().length),m:m.mode||'L',map:String(mapn).slice(0,24),st:m.status==='game'?'game':'lobby'};
+  const d={n:String(me.name||NET.name||'Hôte').slice(0,14),p:Math.min(8,activePlayers().length),m:m.mode||'L',map:String(mapn).slice(0,24),st:m.status==='game'?'game':'lobby'}; if(m.q) d.q=1;
   const key=JSON.stringify(d), now=performance.now();
   if(!force&&key===pubLast&&now-pubAt<20000) return;
   pubLast=key; pubAt=now;
@@ -2088,7 +2105,7 @@ function pubLoad(){
   fetch(pubUrl()).then(r=>r.ok?r.json():Promise.reject(r.status)).then(o=>{
     const now=Date.now()+(NET.off||0), L=[];
     for(const [c,v] of Object.entries(o||{})){
-      if(!v||!/^[A-Z]{4}$/.test(c)) continue;
+      if(!v||!/^[A-Z]{4}$/.test(c)||v.q) continue;
       if(typeof v.ts!=='number'||now-v.ts>90000){ if(now-(v.ts||0)>180000) fetch(pubUrl(c),{method:'DELETE'}).catch(()=>{}); continue; }
       L.push(Object.assign({c},v));
     }
@@ -2115,7 +2132,7 @@ async function quickPlay(){
   let L=[];
   try{
     const r=await fetch(pubUrl()), o=r.ok?await r.json():{}, now=Date.now()+(NET.off||0);
-    L=Object.entries(o||{}).filter(([c,v])=>v&&/^[A-Z]{4}$/.test(c)&&typeof v.ts==='number'&&now-v.ts<60000&&v.st==='lobby'&&(v.p||0)<4)
+    L=Object.entries(o||{}).filter(([c,v])=>v&&!v.q&&/^[A-Z]{4}$/.test(c)&&typeof v.ts==='number'&&now-v.ts<60000&&v.st==='lobby'&&(v.p||0)<4)
       .map(([c,v])=>Object.assign({c},v)).sort((a,b)=>(b.p||0)-(a.p||0)||b.ts-a.ts);
   }catch(e){}
   try{
@@ -2129,7 +2146,7 @@ function autoSeat(){
   const P=activePlayers(); if(!P.some(p=>p.pid===NET.pid)) return;
   NET.autoSeat=false;
   const me=(NET.room.players||{})[NET.pid]; if(me&&me.seat) return;
-  const n=(NET.room.meta||{}).runners||3, seats=[...Array(n).keys()].map(i=>'r'+i).concat('t');
+  const n=(NET.room.meta||{}).runners||3, base=[...Array(n).keys()].map(i=>'r'+i), seats=(NET.room.meta||{}).q?['t'].concat(base):base.concat('t');
   const free=seats.find(s=>!P.some(p=>p.seat===s));
   if(free) netPatch('players/'+NET.pid,{seat:free});
 }
@@ -2142,9 +2159,10 @@ function lobbyFull(m){
 function autoTick(){
   if(!NET.on||!NET.host||NET.view!=='lobby') return;
   const m=NET.room.meta||{}; if(m.status!=='lobby') return;
-  const full=!!m.pub&&lobbyFull(m), now=performance.now();
+  const rq=!!m.q, seated=activePlayers().filter(p=>p.seat).length, full=rq?seated>=2:!!m.pub&&lobbyFull(m), now=performance.now(), delay=rq?(seated>=RKQ_MAX?3000:RKQ_WAIT):AUTO_DELAY;
   if((NET.autoReq||0)>now) return;
-  if(full&&!m.auto){ NET.autoReq=now+1500; netPatch('meta',{auto:serverNow()+AUTO_DELAY}); }
+  if(rq&&m.auto&&seated>=RKQ_MAX&&m.auto-serverNow()>3500){ NET.autoReq=now+1500; netPatch('meta',{auto:serverNow()+3000}); return; }
+  if(full&&!m.auto){ NET.autoReq=now+1500; netPatch('meta',{auto:serverNow()+delay}); }
   else if(!full&&m.auto){ NET.autoReq=now+1500; netPatch('meta',{auto:0}); }
   else if(full&&m.auto&&serverNow()>=m.auto){ NET.autoReq=now+5000; netHostStart(); }
 }
@@ -3126,7 +3144,7 @@ function renderMenu(){
   slots+=slotHTML(3,'Piégeur','var(--trap)',D?wardenTxt()+' (seul : flèches, E)':'Souris, R pivote, Q D défilent');
   const maps=(D?[['rot','Rotation']].concat(DR_MAPS().concat(USER_DR()).map(k=>[k,MAPS[k].name])):NORMAL_MAPS().concat(USER_MAPS().filter(k=>!MAPS[k].dr)).map(k=>[k,MAPS[k].name])).concat([['alea','Au hasard']]);
   const main='<div class="opts">'+
-    (D?'':'<label>Pièges</label>'+seg('mode',[['L','Létaux'],['N','Non létaux']]))+
+
     '<label>Carte</label>'+seg('map',maps)+(MAPS[cfg.map]?mapPreviewHTML(cfg.map):'<span></span><p class="small" style="margin:0">'+(cfg.map==='rot'?'Une carte différente à chaque manche, choisie par vote entre deux manches.':'Une carte tirée au sort.')+'</p>')+
     '<label>Coureurs</label>'+seg('runners',[[2,'2 contre 1'],[3,'3 contre 1']].concat(D?[[4,'4 contre 1'],[5,'5 contre 1']]:[]))+
     (D?'<label>Rôles</label>'+seg('roles',[[0,'Fixes'],[1,'Chacun son tour'],[2,'Deux tours chacun']])+(cfg.roles?'<span></span><p class="small" style="margin:0">Chacun passe piégeur à son tour : '+((cfg.runners+1)*cfg.roles)+' manches, classement individuel.</p>':''):'')+
@@ -3227,7 +3245,7 @@ function homeHub(){
     '<div class="hub-head"><h1 class="logo" aria-label="Traquenard">'+logoHTML()+'</h1><p>Choisis ton mode de jeu</p></div>'+
     '<div class="modes home-nav">'+
       '<button class="mode main" data-act="deathrun"><span class="mtag">Mode principal</span><b>Deathrun</b><span class="mdesc">Grimpe le parcours piégé en zigzag et va toucher le piégeur dans sa galerie. Deux raccourcis secrets par carte.</span><span class="mmeta">1 à 6 joueurs · 7 cartes · rôles tournants</span><span class="mgo">Jouer</span></button>'+
-      '<button class="mode cons" data-act="solo"><span class="mtag">Autre mode</span><b>Construction</b><span class="mdesc">Le piégeur pose ses pièges avant chaque course, les coureurs foncent au drapeau.</span><span class="mmeta">1 à 4 joueurs · pièges létaux ou non</span><span class="mgo">Jouer</span></button>'+
+      '<button class="mode cons" data-act="solo"><span class="mtag">Autre mode</span><b>Construction</b><span class="mdesc">Le piégeur pose ses pièges avant chaque course, les coureurs foncent au drapeau.</span><span class="mmeta">1 à 4 joueurs · 3 vies par manche</span><span class="mgo">Jouer</span></button>'+
       '<button class="mode tuto" data-act="tutopick"><span class="mtag">Débutant</span><b>Tutoriel</b><span class="mdesc">Apprends à courir puis à piéger, en quelques minutes.</span><span class="mmeta">Deathrun ou construction</span><span class="mgo">Commencer</span></button>'+
     '</div>'+
     '<div class="hub-quick"><button class="btn" data-act="quickdr">Partie rapide en ligne</button><button class="btn alt" data-act="dailydr">Défi du jour'+(D.bestDr?' : '+dailyTxt(D.bestDr,1):'')+'</button><button class="btn alt" data-act="marathon">Marathon'+(b?' : '+maraTxt(b):'')+'</button></div>'+
@@ -3464,7 +3482,7 @@ function renderRanked(){
   showOverlay('<div class="sheet wide rksheet"><div class="modehead"><span class="modetag">Compétition</span><h2>Classé</h2></div>'+
     '<p>Quatre rangs séparés : coureur et piégeur, en Deathrun et en construction. Chaque manche classée jouée contre au moins un humain les fait monter ou descendre. Les '+RK_PLACE+' premières manches servent au placement.</p>'+
     '<div class="rkcards">'+cards+'</div>'+
-    '<div class="rkplay"><button class="btn" data-act="rkcreate">Créer un salon classé</button><button class="btn alt" data-act="online">Rejoindre un salon</button></div>'+
+    '<h3>Jouer en classé</h3><div class="rkqmodes"><button class="btn" data-act="rkq" data-v="D">Rechercher une partie Deathrun</button><button class="btn alt" data-act="rkq" data-v="L">Rechercher une partie Construction</button></div>'+(NET.err&&!NET.on?'<p class="netmsg">'+esc(NET.err)+'</p>':'')+
     '<h3>Paliers</h3>'+tiers+
     '<h3>Meilleurs joueurs</h3><div class="seg">'+RK_CATS.map(([c,m,r])=>'<button data-act="rkcat" data-v="'+c+'" aria-pressed="'+(rkCat===c)+'">'+r+' '+m+'</button>').join('')+'</div>'+board+
     '<div class="row-end"><button class="btn alt" data-act="rkrefresh">Actualiser</button><button class="btn alt" data-act="home">Accueil</button></div></div>');
@@ -3554,8 +3572,11 @@ function trapSprite(c,type,x,y,dir,tm){
 }
 
 /* ---------- Signaler un bug : capture d'écran + description, envoyées par e-mail ----------
-   Adresse de réception : à écrire entre les guillemets ci-dessous (ou un alias FormSubmit). */
-const BUG_TO='';
+   L'adresse de réception est lue dans le fichier bug-config.json posé à côté de index.html :
+   { "email": "ton adresse" }   (ou un alias FormSubmit). Ce fichier n'est jamais remplacé par les mises à jour du jeu. */
+let BUG_TO='';
+function bugCfg(){ return fetch('bug-config.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(o=>{ if(o&&typeof o.email==='string') BUG_TO=o.email.trim(); return BUG_TO; }).catch(()=>BUG_TO); }
+if(location.protocol!=='file:') bugCfg();
 let bugShot=null, bugBusy=false;
 function bugLoadH2C(){
   if(window.html2canvas) return Promise.resolve(window.html2canvas);
@@ -3614,10 +3635,11 @@ async function bugOpen(){
 }
 function bugClose(){ const b=document.getElementById('bugbox'); if(b) b.hidden=true; }
 function bugDownload(){ if(!bugShot) return; const a=document.createElement('a'); a.href=bugShot; a.download='traquenard-bug.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
-function bugSend(){
+async function bugSend(){
+  if(!BUG_TO) await bugCfg();
   const b=bugBox(), txt=b.querySelector('#bugtxt').value.trim(), mail=b.querySelector('#bugmail').value.trim(), msg=b.querySelector('#bugmsg');
   if(txt.length<3){ msg.textContent='Écris quelques mots pour décrire le problème.'; b.querySelector('#bugtxt').focus(); return; }
-  if(!BUG_TO){ msg.innerHTML='Aucune adresse de réception n’est réglée dans le jeu.'+(bugShot?' <button class="btn alt" data-bug="dl">Télécharger la capture</button>':''); return; }
+  if(!BUG_TO){ msg.innerHTML='Aucune adresse de réception : le fichier bug-config.json est absent à côté du jeu.'+(bugShot?' <button class="btn alt" data-bug="dl">Télécharger la capture</button>':''); return; }
   const btn=b.querySelector('[data-bug="send"]'); btn.disabled=true; msg.textContent='Envoi…';
   const infos=bugInfos();
   /* envoi par un formulaire caché : FormSubmit relaie vers l'adresse, capture en pièce jointe */
@@ -3643,6 +3665,53 @@ function bugSend(){
   try{ f.submit(); }catch(e){ msg.textContent='Envoi impossible.'; btn.disabled=false; }
 }
 
+/* ---------- File d'attente classée : le jeu trouve les joueurs et lance la partie tout seul ---------- */
+const RKQ_MAX=4, RKQ_WAIT=25000;
+let RKQ=null;
+function rkqPaint(t){
+  showOverlay('<div class="sheet rkqsheet"><div class="modehead"><span class="modetag">Classé</span><h2>Recherche de joueurs</h2></div><div class="rkqspin" aria-hidden="true"></div><p>'+t+'</p><div class="row-end"><button class="btn alt" data-act="rkqcancel">Quitter la file</button></div></div>');
+}
+async function rkqStart(mode){
+  if(NET.on||RKQ) return;
+  if(!NET.name) NET.name=lsGet('traquenard-nom','')||'Joueur';
+  RKQ={mode,t0:Date.now()}; NET.err='';
+  rkqPaint('Recherche d’une file '+(mode==='D'?'Deathrun':'construction')+'…');
+  let L=[];
+  try{ const r=await fetch(pubUrl()), o=r.ok?await r.json():{}, now=Date.now()+(NET.off||0);
+    L=Object.entries(o||{}).filter(([c,v])=>v&&v.q===1&&v.m===mode&&/^[A-Z]{4}$/.test(c)&&typeof v.ts==='number'&&now-v.ts<45000&&v.st==='lobby'&&(v.p||0)<RKQ_MAX)
+      .map(([c,v])=>Object.assign({c},v)).sort((a,b)=>(b.p||0)-(a.p||0)||b.ts-a.ts); }catch(e){}
+  NET.autoSeat=true;
+  for(const v of L){ if(!RKQ) return; if(await netEnter(v.c,false)===true) return; }
+  if(!RKQ){ NET.autoSeat=false; return; }
+  const keep={mode:cfg.mode,map:cfg.map,rounds:cfg.rounds,runners:cfg.runners};
+  Object.assign(cfg,{mode,map:mode==='D'?'rot':'alea',rounds:5,runners:3});
+  for(let k=0;k<4;k++){ const r=await netEnter(randomCode(),true); if(r==='taken') continue; if(r===true) netPatch('meta',{pub:true,ranked:1,q:1,roles:mode==='D'?1:0}); break; }
+  Object.assign(cfg,keep);
+  if(!NET.on){ RKQ=null; NET.autoSeat=false; NET.err=NET.err||'File indisponible pour le moment.'; renderRanked(); }
+}
+function rkqCancel(){ const was=NET.on; RKQ=null; NET.autoSeat=false; if(was) netLeave(); renderRanked(); }
+/* chaque client garde une place valable tant que la file attend */
+function rkqTick(){
+  if(!NET.on||NET.view!=='lobby') return;
+  const m=NET.room.meta||{}; if(!m.q||m.status!=='lobby') return;
+  const P=activePlayers(), me=P.find(p=>p.pid===NET.pid); if(!me) return;
+  const clash=me.seat&&P.some(p=>p.pid!==NET.pid&&p.seat===me.seat&&(p.joined||0)<(me.joined||0));
+  if(!me.seat||clash){ if(clash) netPatch('players/'+NET.pid,{seat:''}); NET.autoSeat=true; }
+}
+function rkqHTML(m,P){
+  const seated=P.filter(p=>p.seat), n=seated.length, mode=m.mode==='D';
+  const t=Math.floor((Date.now()-((RKQ&&RKQ.t0)||Date.now()))/1000);
+  const list=P.map(p=>'<div class="rkqp"><b>'+esc(p.name||'Joueur')+(p.pid===NET.pid?' (toi)':'')+'</b><small>Coureur</small>'+rkBadge(rkOf(p.pid),(mode?'d':'c')+'r')+'<small>Piégeur</small>'+rkBadge(rkOf(p.pid),(mode?'d':'c')+'t')+'</div>').join('');
+  const st=m.auto?'<p class="autocd">Partie trouvée : départ dans <b id="autocd">'+Math.max(0,Math.ceil((m.auto-serverNow())/1000))+'</b> s</p>'
+    :'<p class="autocd idle">En attente d’au moins un autre joueur… <span id="rkqt">'+Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'</span></p>';
+  return '<div class="sheet rkqsheet"><div class="modehead"><span class="modetag">Classé · '+(mode?'Deathrun':'Construction')+'</span><h2>Recherche de joueurs</h2></div>'+
+    '<div class="rkqspin" aria-hidden="true"></div><p class="rkqn">'+n+' joueur'+(n>1?'s':'')+' sur '+RKQ_MAX+'</p>'+st+'<div class="rkqlist">'+list+'</div>'+
+    '<p class="small">La partie démarre dès qu’il y a '+RKQ_MAX+' joueurs, ou '+Math.round(RKQ_WAIT/1000)+' s après l’arrivée du deuxième. Les places vides sont jouées par l’ordinateur.'+(mode?' Chacun passe piégeur à son tour.':'')+'</p>'+
+    chatHTML()+'<div class="row-end"><button class="btn alt" data-act="rkqcancel">Quitter la file</button></div></div>';
+}
+setInterval(()=>{ const e=document.getElementById('rkqt'); if(e&&RKQ){ const t=Math.floor((Date.now()-RKQ.t0)/1000), v=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); if(e.textContent!==v) e.textContent=v; } },500);
+
+{ const cr=document.getElementById('corner'); if(cr&&cr.parentElement!==document.body) document.body.appendChild(cr); }   /* au-dessus de la barre d'onglets */
 let padsOk=true;
 function pollInputs(){
   let pads=[];
@@ -4304,7 +4373,8 @@ const ACT={
   ranked(){ renderRanked(); },
   rkcat(b){ rkCat=b.dataset.v; renderRanked(); },
   rkrefresh(){ RKB=null; MYRK.__ok=0; renderRanked(); },
-  rkcreate(){ RK_WANT=true; NETACT.create(); },
+  rkq(b){ rkqStart(b.dataset.v); },
+  rkqcancel(){ rkqCancel(); },
   taunt(b){ const box=tauntBox(); if(!box.hidden){ tauntClose(); return; } const r=b.getBoundingClientRect(); box.hidden=false; box.style.top=(r.bottom+8)+'px'; box.style.right=Math.max(8,innerWidth-r.right)+'px'; },
   emote(b){ sendEmote(+b.dataset.i); tauntClose(); },
   specclaim(b){ specClaim(b); },
@@ -4428,7 +4498,8 @@ function newGame(setup,noStart){
   if(!setup&&NET.on){ netRematch(); return; }
   const S=setup||{mode:cfg.mode,map:cfg.map==='alea'||!MAPS[cfg.map]||(!!MAPS[cfg.map].dr!==(cfg.mode==='D'))?pick(cfg.mode==='D'?DR_MAPS():NORMAL_MAPS()):cfg.map,rounds:cfg.rounds,runners:cfg.runners,
     ai:cfg.ai.slice(),skins:cfg.skins.slice(),names:null,remote:[false,false,false],diff:cfg.diff,party:!!cfg.party,rotate:cfg.map==='rot'&&cfg.mode==='D',roles:cfg.mode==='D'?cfg.roles:0};
-  const k=S.map, dr=S.mode==='D', md=dr?'L':S.mode;
+  if(S.mode==='N') S.mode='L';   /* le mode non létal n'existe plus */
+  const k=S.map, dr=S.mode==='D', md='L';
   G={rotate:!!S.rotate&&S.mode==='D',rotList:null,party:!!S.party,mod:'',daily:S.daily||0,dailyDr:!!S.dailyDr,mara:S.mara?{lives:MARA_LIVES,cleared:0,time:0}:null,diff:S.diff==null?1:S.diff,deathrun:dr,mode:md,lethal:md==='L',mapKey:k,map:MAPS[k],round:0,rounds:S.rounds,phase:'draft',runners:[],teamScore:0,setup:S,aiTrap:!!S.ai[3],
      trapper:{aug:{},score:0,points:0,freeLeft:0,unlocked:new Set(START_TRAPS[md])},
      traps:[],vents:[],bullets:[],pilons:[],parts:[],timer:0,sel:START_TRAPS[md][0],dir:0,shake:0,toast:null,
@@ -5649,6 +5720,7 @@ function onRoomChange(key,first){
     if(m.status==='lobby'&&NET.view==='game'){ G=null; NET.seat=null; NET.idx=-1; loadMap('triple'); NET.view='lobby'; setHome(false); renderHud(); renderDock(); }
     if(NET.view==='lobby') renderOnline();
     lobbyPub(false);
+    if(NET.view==='lobby'&&NET.room.meta) rkqTick();
     if(NET.autoSeat&&NET.view==='lobby'&&NET.room.meta) autoSeat();
     if(NET.view==='game'&&G&&!G.demo&&!(G.phase==='place'&&canTrap())){ const k=spectators().map(p=>p.pid+':'+p.seat).join()+'|'+freeSeats().join(); if(k!==NET.specK){ NET.specK=k; renderDock(); } }
   }
@@ -6113,6 +6185,7 @@ function renderOnline(){
   const runners=m.runners||3;
   rkHostCheck(); rkNeed(P.map(p=>p.u).filter(u=>u&&u!==UID));
   const rkFor=(h,s)=>h?rkBadge(rkOf(h.pid),(m.mode==='D'?'d':'c')+(s==='t'?'t':'r')):'';
+  if(m.q&&m.status!=='game'){ rkqTick(); lobbySet(rkqHTML(m,P)); NAVTAB='classe'; return; }
   const holder=s=>P.find(p=>p.seat===s);
   const kick=p=>NET.host&&p&&p.pid!==NET.pid?'<button class="kick" data-act="net" data-n="kick" data-p="'+p.pid+'" title="Exclure '+esc(p.name||'Joueur')+' du salon">Exclure</button>':'';
   const slot=(s,title,color)=>{
@@ -6129,14 +6202,13 @@ function renderOnline(){
   const dr=m.mode==='D';
   const opts='<div class="opts">'+
       '<label>Jeu</label><div class="seg modetabs"><button data-act="net" data-n="opt" data-k="mode" data-v="D" aria-pressed="'+dr+'"'+(NET.host?'':' disabled')+'>Deathrun</button><button data-act="net" data-n="opt" data-k="mode" data-v="L" aria-pressed="'+(!dr)+'"'+(NET.host?'':' disabled')+'>Construction</button></div>'+
-      (dr?'':'<label>Pièges</label>'+netSeg('mode',[['L','Létaux'],['N','Non létaux']],m.mode))+
+
       '<label>Carte</label>'+netSeg('map',(dr?['rot'].concat(DR_MAPS()).concat(NET.host?USER_DR():(/^u_/.test(m.map||'')&&!MAPS[m.map]?[m.map]:[])):NORMAL_MAPS().concat(NET.host?USER_MAPS().filter(k=>!MAPS[k].dr):(/^u_/.test(m.map||'')&&!MAPS[m.map]?[m.map]:[]))).map(k=>k==='rot'?['rot','Rotation']:[k,MAPS[k]?MAPS[k].name:undefined]).concat([['alea','Au hasard']]),m.map)+
       '<label>Coureurs</label>'+netSeg('runners',[[2,'2'],[3,'3']].concat(dr?[[4,'4'],[5,'5']]:[]),runners)+
       (dr?'<label>Rôles</label>'+netSeg('roles',[[0,'Fixes'],[1,'Chacun son tour'],[2,'Deux tours']],m.roles||0):'')+
       (dr&&m.roles?'':'<label>Manches</label>'+netSeg('rounds',[[5,'5'],[7,'7'],[9,'9']],m.rounds))+
       (dr?'':'<label>Mode fête</label>'+netSeg('party',[[0,'Non'],[1,'Oui']],m.party?1:0))+
       '<label>Salon</label>'+netSeg('pub',[[0,'Privé'],[1,'Public']],m.pub?1:0)+
-      '<label>Classée</label>'+netSeg('ranked',[[0,'Non'],[1,'Oui']],m.ranked?1:0)+
       (m.ranked?'<p class="rknote">Partie classée : chaque manche jouée contre au moins un humain fait bouger ton rang de '+(dr?'Deathrun':'construction')+', coureur ou piégeur selon ta place.</p>':'')+
     '</div>';
   lobbySet('<div class="sheet wide lobby lobby2">'+
