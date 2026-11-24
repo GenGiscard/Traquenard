@@ -546,6 +546,8 @@ html body.has-topnav #topnav{padding-right:170px}
 #ov .rkqtop{display:flex;align-items:center;justify-content:center;gap:16px;margin:6px 0 2px}
 #ov .rkqtop .rkqspin{margin:0}
 #ov .rkqsheet .rkqp{padding:6px 10px}
+#ov .rkskin .skins{grid-template-columns:repeat(auto-fit,minmax(64px,1fr))!important;max-width:720px}
+#ov .rkskin h3{margin:10px 0 4px}
 #ov .rtcst{font-size:13px;color:#9A8FB0;margin-top:4px}#ov .rtcst.ok{color:#7CDB6B}
 
 /* ---- v69 : thème sombre plein écran, barre d'onglets, cartes de mode, salon ---- */
@@ -3567,6 +3569,7 @@ function renderRanked(){
   showOverlay('<div class="sheet wide rksheet"><div class="modehead"><span class="modetag">Compétition</span><h2>Classé</h2></div>'+
     '<p>Quatre rangs séparés : coureur et piégeur, en Deathrun et en construction. Chaque manche classée jouée contre au moins un humain les fait monter ou descendre. Les '+RK_PLACE+' premières manches servent au placement.</p>'+
     '<div class="rkcards">'+cards+'</div>'+
+    '<h3>Ton personnage</h3><div class="rkskin">'+skinPicker(mySkin(),'data-act="rkskin"')+'</div>'+
     '<h3>Jouer en classé</h3><div class="seg rkmodeseg"><button data-act="rkmode" data-v="L" aria-pressed="'+(rkMode==='L')+'">Construction</button><button data-act="rkmode" data-v="D" aria-pressed="'+(rkMode==='D')+'">Deathrun</button></div>'+
     '<div class="rkqmodes"><button class="btn rkqbtn tr" data-act="rkq" data-v="t"'+(GRP&&(GRP.lead!==NET.pid||grpActive().length)?' disabled':'')+'><b>File piégeur</b><small>Seul contre l’équipe de coureurs · ton rang '+rkBadge(MYRK,(rkMode==='D'?'d':'c')+'t')+'</small></button>'+
     '<button class="btn rkqbtn ru" data-act="rkq" data-v="r"'+(GRP&&GRP.lead!==NET.pid?' disabled':'')+'><b>File coureur'+(GRP&&grpActive().length?' en groupe ('+(1+grpActive().length)+')':'')+'</b><small>Seul ou avec ton groupe · ton rang '+rkBadge(MYRK,(rkMode==='D'?'d':'c')+'r')+'</small></button></div>'+
@@ -3879,6 +3882,7 @@ function rkqHTML(m,P){
     :'<p class="autocd idle">Il manque '+miss+'… <span id="rkqt">'+Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'</span></p>';
   return '<div class="sheet rkqsheet"><div class="modehead"><span class="modetag">Classé · '+(dr?'Deathrun':'Construction')+' · file '+rkqRoleTxt(NET.qRole)+'</span><h2>Recherche de joueurs</h2></div>'+
     '<div class="rkqtop"><div class="rkqspin" aria-hidden="true"></div><button class="btn alt" data-act="rkqcancel">Quitter la file</button></div><p class="rkqn">1 piégeur, '+R.length+' coureur'+(R.length>1?'s':'')+' sur '+RKQ_R+'</p>'+st+'<div class="rkqlist">'+list+'</div>'+
+    '<div class="rkskin"><h3>Ton personnage</h3>'+skinPicker(((P.find(p=>p.pid===NET.pid)||{}).skin)||mySkin(),'data-act="net" data-n="skin"')+'</div>'+
     (watch?'<p class="small">'+watch+' joueur'+(watch>1?'s':'')+' en train de prendre place…</p>':'')+
     '<p class="small">La partie démarre dès qu’il y a un piégeur et au moins un coureur : '+Math.round(RKQ_WAIT/1000)+' s plus tard, ou 3 s quand les '+RKQ_R+' places de coureur sont prises. Clique sur un pseudo pour voir ses rangs.</p>'+
     chatHTML()+'</div>';
@@ -4489,6 +4493,10 @@ function cpAmbFront(){
   }
 }
 
+/* personnage choisi en ligne et en classé, gardé d'une partie à l'autre */
+let MYSKIN=lsGet('traquenard-skin','');
+function mySkin(){ return SKINS.includes(MYSKIN)?MYSKIN:SKINS[0]; }
+function setMySkin(k){ if(!SKINS.includes(k)) return; MYSKIN=k; lsSet('traquenard-skin',k); }
 let padsOk=true;
 function pollInputs(){
   let pads=[];
@@ -5151,6 +5159,7 @@ const ACT={
   bugreport(){ bugOpen(); },
   ranked(){ renderRanked(); },
   rkcat(b){ rkCat=b.dataset.v; renderRanked(); },
+  rkskin(b){ setMySkin(b.dataset.v); renderRanked(); },
   rkrefresh(){ RKB=null; MYRK.__ok=0; renderRanked(); },
   rkq(b){ rkqStart(rkMode,b.dataset.v); },
   rkmode(b){ rkMode=b.dataset.v==='L'?'L':'D'; lsSet('traquenard-rkmode',rkMode); if(GRP&&GRP.lead===NET.pid) grpReq('PATCH','',{gm:rkMode}); renderRanked(); },
@@ -6918,7 +6927,7 @@ async function netEnter(code,create){
   if(G&&G.demo){ G=null; loadMap('triple'); }   /* la démo d'accueil s'arrête : rien ne doit partir sur le réseau */
   if(create) await fbReq('PUT','meta',{host:NET.pid,mode:cfg.mode,map:cfg.map==='rot'?(cfg.mode==='D'?'rot':'alea'):MAPS[cfg.map]&&!!MAPS[cfg.map].dr!==(cfg.mode==='D')?'alea':cfg.map,rounds:cfg.rounds,runners:cfg.runners,status:'lobby',created:{'.sv':'timestamp'}});
   const mc=myCos();
-  await fbReq('PUT','players/'+NET.pid,{name:NET.name,seat:'',skin:SKINS[0],tr:mc.t,orn:mc.o,u:UID,joined:{'.sv':'timestamp'},seen:{'.sv':'timestamp'}});
+  await fbReq('PUT','players/'+NET.pid,{name:NET.name,seat:'',skin:mySkin(),tr:mc.t,orn:mc.o,u:UID,joined:{'.sv':'timestamp'},seen:{'.sv':'timestamp'}});
   if(!NET.on) return false;
   NET.view='lobby';
   netListen();
@@ -6948,7 +6957,7 @@ const NETACT={
     if(P.some(p=>p.seat===s&&p.pid!==NET.pid)) return;
     netPatch('players/'+NET.pid,{seat:s});
   },
-  skin(b){ netPatch('players/'+NET.pid,{skin:b.dataset.v}); },
+  skin(b){ setMySkin(b.dataset.v); netPatch('players/'+NET.pid,{skin:b.dataset.v}); },
   opt(b){ if(!NET.host) return; const k=b.dataset.k, v=(k==='map'||k==='mode')?b.dataset.v:+b.dataset.v, m=NET.room.meta||{}, o={[k]:v};
     if(k==='mode'&&MAPS[m.map]&&!!MAPS[m.map].dr!==(v==='D')) o.map='alea';
     if(k==='mode'&&v!=='D'&&(m.runners||3)>3) o.runners=3;
